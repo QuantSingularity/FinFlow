@@ -10,7 +10,7 @@
 
 > **Note**: This project is under active development. Features and functionalities are continuously being enhanced to improve financial operations capabilities and user experience.
 
-### 📑 Table of Contents
+### Table of Contents
 
 - [Overview](#overview)
 - [Project Structure](#project-structure)
@@ -27,7 +27,7 @@
 
 ---
 
-## 🔍 Overview
+## Overview
 
 FinFlow is a modern financial operations platform designed to help businesses streamline their financial workflows, from payment processing to accounting and analytics. The platform combines traditional financial operations with cutting-edge technology to provide a secure, scalable, and efficient solution for managing financial data and processes. It is built on a foundation of independent, domain-specific microservices to ensure high availability and maintainability.
 
@@ -50,7 +50,7 @@ FinFlow/
 └── tools/                  # Formatter configs, linting tools, and dev utilities
 ```
 
-## ✨ Key Features
+## Key Features
 
 FinFlow's functionality is organized into five core service domains and a dedicated mobile experience.
 
@@ -122,7 +122,7 @@ A modern, cross-platform experience for on-the-go management:
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 FinFlow is built on a modern microservices architecture, ensuring modularity, scalability, and resilience.
 
@@ -177,7 +177,7 @@ The FinFlow platform is built using a modern, performant, and well-supported tec
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -216,7 +216,7 @@ For individual service development, you will need to configure the environment v
 
 ---
 
-## 📚 API Documentation
+## API Documentation
 
 FinFlow provides comprehensive API documentation using OpenAPI/Swagger, accessible for each service when running locally.
 
@@ -261,7 +261,7 @@ _Response provides the payment ID, status, and processor details._
 
 ---
 
-## 🧪 Testing
+## Testing
 
 FinFlow includes comprehensive testing across all services to ensure reliability and accuracy. The strategy covers unit tests, integration tests, and end-to-end tests.
 
@@ -328,6 +328,6 @@ FinFlow uses GitHub Actions for continuous integration and deployment:
 | **Contributing Guidelines** | `CONTRIBUTING.md`    | Contribution workflow, coding standards, and PR requirements   |
 | **Troubleshooting**         | `TROUBLESHOOTING.md` | Common issues, diagnostics, and remediation steps              |
 
-## 📄 License
+## License
 
 FinFlow is licensed under the **MIT License**.
