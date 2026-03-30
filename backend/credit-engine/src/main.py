@@ -84,10 +84,12 @@ class CreditScoreRequest(BaseModel):
     # Fix: Use alias for numInvoices and avgCashflow to match the Python convention
     class Config:
         populate_by_name = True
-        alias_generator = lambda field_name: {
-            "numInvoices": "num_invoices",
-            "avgCashflow": "avg_cashflow",
-        }.get(field_name, field_name)
+
+        def alias_generator(field_name):
+            return {
+                "numInvoices": "num_invoices",
+                "avgCashflow": "avg_cashflow",
+            }.get(field_name, field_name)
 
 
 class CreditScoreResponse(BaseModel):

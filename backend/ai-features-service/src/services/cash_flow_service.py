@@ -237,7 +237,7 @@ class CashFlowService:
                 features_df["date"].max() + timedelta(days=i)
                 for i in range(1, horizon + 1)
             ]
-            future_df = pd.DataFrame({"date": future_dates})
+            pd.DataFrame({"date": future_dates})
             ml_models = ["random_forest", "gradient_boosting", "linear_regression"]
             ml_predictions = []
             for model_name in ml_models:

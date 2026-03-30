@@ -1013,7 +1013,7 @@ if __name__ == "__main__":
     )
     low_risk_context = {"country_code": "US", "ip_address": "192.168.1.1"}
     result_low = validator.validate_transaction(low_risk_tx, low_risk_context)
-    logger.info(f"\n--- Low Risk Transaction Result ---")
+    logger.info("\n--- Low Risk Transaction Result ---")
     logger.info(result_low.model_dump_json(indent=2))
     high_risk_tx = TransactionRequest(
         transaction_id="TX1002",
@@ -1031,7 +1031,7 @@ if __name__ == "__main__":
         "location": "Kabul",
     }
     result_high = validator.validate_transaction(high_risk_tx, high_risk_context)
-    logger.info(f"\n--- High Risk Transaction Result ---")
+    logger.info("\n--- High Risk Transaction Result ---")
     logger.info(result_high.model_dump_json(indent=2))
     invalid_tx = TransactionRequest(
         transaction_id="TX1003",
@@ -1045,5 +1045,5 @@ if __name__ == "__main__":
     )
     invalid_context = {"country_code": "IR", "ip_address": "2.2.2.2"}
     result_invalid = validator.validate_transaction(invalid_tx, invalid_context)
-    logger.info(f"\n--- Invalid Transaction Result (Sanctioned Country) ---")
+    logger.info("\n--- Invalid Transaction Result (Sanctioned Country) ---")
     logger.info(result_invalid.model_dump_json(indent=2))
