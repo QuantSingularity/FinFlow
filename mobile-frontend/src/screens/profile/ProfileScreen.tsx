@@ -1,22 +1,23 @@
-import React, { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect, useState } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import {
-  getProfile,
-  updateProfile,
-  logout,
-} from "../../store/slices/authSlice";
-import InputField from "../../components/common/InputField";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
+import InputField from "../../components/common/InputField";
+import type { AppDispatch, RootState } from "../../store";
+import {
+  getProfile,
+  logout,
+  updateProfile,
+} from "../../store/slices/authSlice";
 
 const ProfileScreen: React.FC = ({ navigation }: any) => {
   const dispatch = useDispatch<AppDispatch>();

@@ -1,11 +1,11 @@
-import React from "react";
+import type React from "react";
 import {
-  StyleSheet,
-  TouchableOpacity,
-  Text,
   ActivityIndicator,
-  ViewStyle,
-  TextStyle,
+  StyleSheet,
+  Text,
+  type TextStyle,
+  TouchableOpacity,
+  type ViewStyle,
 } from "react-native";
 
 interface ButtonProps {

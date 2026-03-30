@@ -1,11 +1,11 @@
-import React from "react";
+import type React from "react";
 import {
   StyleSheet,
-  View,
   Text,
   TextInput,
-  TextInputProps,
-  ViewStyle,
+  type TextInputProps,
+  View,
+  type ViewStyle,
 } from "react-native";
 
 interface InputFieldProps extends TextInputProps {

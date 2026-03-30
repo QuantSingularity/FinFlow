@@ -1,7 +1,11 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import { authApi } from "../../services/api";
-import { AuthState, User } from "../../types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  createAsyncThunk,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
+import { authApi } from "../../services/api";
+import type { AuthState, User } from "../../types";
 
 // Initial state
 const initialState: AuthState = {

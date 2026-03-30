@@ -1,36 +1,36 @@
-import React from "react";
-import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import {
-  BarChart,
+  BarChart as BarChartIcon,
+  Download, // Calendar, Filter,
+  LineChart as LineChartIcon,
+  PieChart as PieChartIcon,
+  Table as TableIcon,
+  TrendingUp,
+} from "lucide-react";
+import React from "react";
+import {
   Bar,
-  LineChart,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
   Line,
-  PieChart,
+  LineChart,
   Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
 } from "recharts";
-import {
-  TrendingUp,
-  Download, // Calendar, Filter,
-  PieChart as PieChartIcon,
-  BarChart as BarChartIcon,
-  LineChart as LineChartIcon,
-  Table as TableIcon,
-} from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "../components/ui/card";
 import { formatCurrency } from "../lib/utils";
 

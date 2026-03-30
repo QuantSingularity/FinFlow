@@ -1,19 +1,19 @@
-import { describe, test, expect, jest, beforeEach } from "@jest/globals";
+import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import configureStore from "redux-mock-store";
 import thunk from "redux-thunk";
+import paymentService from "../../services/paymentService";
 import paymentReducer, {
-  paymentStart,
-  paymentSuccess,
-  paymentFailure,
+  fetchPayments,
+  fetchPaymentsFailure,
   fetchPaymentsStart,
   fetchPaymentsSuccess,
-  fetchPaymentsFailure,
-  resetPaymentState,
-  processPayment,
-  fetchPayments,
   getPaymentStatus,
+  paymentFailure,
+  paymentStart,
+  paymentSuccess,
+  processPayment,
+  resetPaymentState,
 } from "../paymentSlice";
-import paymentService from "../../services/paymentService";
 
 // Mock the payment service
 jest.mock("../../services/paymentService");
@@ -188,7 +188,7 @@ describe("Payment Slice", () => {
 
       try {
         await store.dispatch(processPayment(mockPaymentData));
-      } catch (error) {
+      } catch (_error) {
         // Expected to throw
       }
 
@@ -221,7 +221,7 @@ describe("Payment Slice", () => {
 
       try {
         await store.dispatch(fetchPayments());
-      } catch (error) {
+      } catch (_error) {
         // Expected to throw
       }
 

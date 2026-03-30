@@ -1,14 +1,15 @@
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
 import {
+  Alert,
+  ScrollView,
   StyleSheet,
-  View,
   Text,
   TouchableOpacity,
-  ScrollView,
-  Alert,
+  View,
 } from "react-native";
-import InputField from "../../components/common/InputField";
 import Button from "../../components/common/Button";
+import InputField from "../../components/common/InputField";
 
 const ForgotPasswordScreen: React.FC = ({ navigation }: any) => {
   const [email, setEmail] = useState("");
@@ -40,7 +41,7 @@ const ForgotPasswordScreen: React.FC = ({ navigation }: any) => {
           "Password reset instructions have been sent to your email address.",
           [{ text: "OK", onPress: () => navigation.navigate("Login") }],
         );
-      } catch (error) {
+      } catch (_error) {
         Alert.alert("Error", "Failed to send reset email. Please try again.");
       } finally {
         setIsLoading(false);

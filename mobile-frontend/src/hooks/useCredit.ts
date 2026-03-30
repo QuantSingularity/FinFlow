@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../store";
+import type { AppDispatch, RootState } from "../store";
 import { fetchCreditScore, fetchLoans } from "../store/slices/creditSlice";
 
 export const useCredit = () => {
@@ -11,7 +11,7 @@ export const useCredit = () => {
 
   useEffect(() => {
     loadCreditData();
-  }, []);
+  }, [loadCreditData]);
 
   const loadCreditData = () => {
     dispatch(fetchCreditScore());

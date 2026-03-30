@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate, Link } from "react-router-dom";
-import { AppDispatch, RootState } from "../store";
+import { Link, useNavigate } from "react-router-dom";
+import { register } from "../services/authService";
+import type { AppDispatch, RootState } from "../store";
 import {
+  registerFailure,
   registerStart,
   registerSuccess,
-  registerFailure,
 } from "../store/authSlice";
-import { register } from "../services/authService";
 
 const Register: React.FC = () => {
   const [email, setEmail] = useState("");

@@ -1,34 +1,31 @@
-import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createDrawerNavigator } from "@react-navigation/drawer";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useSelector } from "react-redux";
-import { RootState } from "../store";
-
+import AccountingScreen from "../screens/accounting/AccountingScreen";
+import BalanceSheetScreen from "../screens/accounting/BalanceSheetScreen";
+import CashFlowScreen from "../screens/accounting/CashFlowScreen";
+import IncomeStatementScreen from "../screens/accounting/IncomeStatementScreen";
+import AnalyticsScreen from "../screens/analytics/AnalyticsScreen";
+import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 // Import screens
 // Auth screens
 import LoginScreen from "../screens/auth/LoginScreen";
 import RegisterScreen from "../screens/auth/RegisterScreen";
-import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
-
+import ApplyLoanScreen from "../screens/credit/ApplyLoanScreen";
+import CreditScoreScreen from "../screens/credit/CreditScoreScreen";
+import CreditScreen from "../screens/credit/CreditScreen";
+import LoanDetailsScreen from "../screens/credit/LoanDetailsScreen";
+import LoansScreen from "../screens/credit/LoansScreen";
 // Main screens
 import DashboardScreen from "../screens/dashboard/DashboardScreen";
-import PaymentsScreen from "../screens/payments/PaymentsScreen";
-import PaymentDetailsScreen from "../screens/payments/PaymentDetailsScreen";
 import CreatePaymentScreen from "../screens/payments/CreatePaymentScreen";
-import AccountingScreen from "../screens/accounting/AccountingScreen";
-import BalanceSheetScreen from "../screens/accounting/BalanceSheetScreen";
-import IncomeStatementScreen from "../screens/accounting/IncomeStatementScreen";
-import CashFlowScreen from "../screens/accounting/CashFlowScreen";
-import AnalyticsScreen from "../screens/analytics/AnalyticsScreen";
-import CreditScreen from "../screens/credit/CreditScreen";
-import CreditScoreScreen from "../screens/credit/CreditScoreScreen";
-import LoansScreen from "../screens/credit/LoansScreen";
-import LoanDetailsScreen from "../screens/credit/LoanDetailsScreen";
-import ApplyLoanScreen from "../screens/credit/ApplyLoanScreen";
+import PaymentDetailsScreen from "../screens/payments/PaymentDetailsScreen";
+import PaymentsScreen from "../screens/payments/PaymentsScreen";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
+import type { RootState } from "../store";
 
 // Define navigation types
 export type AuthStackParamList = {

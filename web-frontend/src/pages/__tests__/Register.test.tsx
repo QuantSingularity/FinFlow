@@ -1,11 +1,10 @@
-import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
+import { BrowserRouter } from "react-router-dom";
 import configureStore from "redux-mock-store";
 import thunk from "redux-thunk";
-import { BrowserRouter } from "react-router-dom";
-import Register from "../Register";
 import authService from "../../services/authService";
+import Register from "../Register";
 
 // Mock the auth service
 jest.mock("../../services/authService");

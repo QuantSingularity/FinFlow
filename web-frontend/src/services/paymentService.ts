@@ -1,5 +1,5 @@
+import type { Payment } from "../types";
 import api from "./api";
-import { Payment } from "../types";
 
 export const getPayments = async (): Promise<Payment[]> => {
   const response = await api.get("/payments");

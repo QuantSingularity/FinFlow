@@ -1,12 +1,12 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import type React from "react";
 import {
+  ActivityIndicator,
   StyleSheet,
-  View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
+  View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 interface EmptyStateProps {
   title: string;

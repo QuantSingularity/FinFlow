@@ -1,21 +1,22 @@
-import React, { useEffect } from "react";
+import type React from "react";
+import { useEffect } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
   ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { fetchDashboardMetrics } from "../../store/slices/analyticsSlice";
-import { fetchTransactions } from "../../store/slices/paymentsSlice";
-import { fetchCreditScore } from "../../store/slices/creditSlice";
-import { fetchBalanceSheet } from "../../store/slices/accountingSlice";
+import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
 import MetricCard from "../../components/dashboard/MetricCard";
 import TransactionList from "../../components/payments/TransactionList";
-import Button from "../../components/common/Button";
+import type { AppDispatch, RootState } from "../../store";
+import { fetchBalanceSheet } from "../../store/slices/accountingSlice";
+import { fetchDashboardMetrics } from "../../store/slices/analyticsSlice";
+import { fetchCreditScore } from "../../store/slices/creditSlice";
+import { fetchTransactions } from "../../store/slices/paymentsSlice";
 
 const DashboardScreen: React.FC = ({ navigation }: any) => {
   const dispatch = useDispatch<AppDispatch>();

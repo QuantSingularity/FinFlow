@@ -1,6 +1,10 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 import { accountingApi } from "../../services/api";
-import { AccountingEntry, FinancialReport } from "../../types";
+import type { AccountingEntry } from "../../types";
 
 interface AccountingState {
   journalEntries: AccountingEntry[];

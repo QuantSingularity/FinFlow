@@ -1,20 +1,21 @@
-import React, { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
   ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
+import Button from "../../components/common/Button";
+import Card from "../../components/common/Card";
+import type { AppDispatch, RootState } from "../../store";
 import {
   fetchTransactionById,
   refundPayment,
 } from "../../store/slices/paymentsSlice";
-import Button from "../../components/common/Button";
-import Card from "../../components/common/Card";
-import { Alert } from "react-native";
 
 const PaymentDetailsScreen: React.FC = ({ route, navigation }: any) => {
   const { id } = route.params;

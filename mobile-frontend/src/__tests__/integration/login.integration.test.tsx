@@ -1,10 +1,9 @@
-import React from "react";
-import { render, fireEvent, waitFor } from "@testing-library/react-native";
-import { Provider } from "react-redux";
-import { store } from "../../store";
 import { NavigationContainer } from "@react-navigation/native";
-import LoginScreen from "../../screens/auth/LoginScreen";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import axios from "axios";
+import { Provider } from "react-redux";
+import LoginScreen from "../../screens/auth/LoginScreen";
+import { store } from "../../store";
 
 jest.mock("axios");
 const mockedAxios = axios as jest.Mocked<typeof axios>;

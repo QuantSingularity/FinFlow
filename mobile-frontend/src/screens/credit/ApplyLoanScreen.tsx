@@ -1,11 +1,12 @@
-import React, { useState } from "react";
-import { StyleSheet, View, Text, ScrollView, Alert } from "react-native";
+import type React from "react";
+import { useState } from "react";
+import { Alert, ScrollView, StyleSheet, Text } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { applyForLoan } from "../../store/slices/creditSlice";
-import InputField from "../../components/common/InputField";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
+import InputField from "../../components/common/InputField";
+import type { AppDispatch, RootState } from "../../store";
+import { applyForLoan } from "../../store/slices/creditSlice";
 
 const ApplyLoanScreen: React.FC = ({ navigation }: any) => {
   const [amount, setAmount] = useState("");
@@ -25,7 +26,7 @@ const ApplyLoanScreen: React.FC = ({ navigation }: any) => {
       isValid = false;
     }
 
-    if (!term || parseInt(term) <= 0 || parseInt(term) > 360) {
+    if (!term || parseInt(term, 10) <= 0 || parseInt(term, 10) > 360) {
       newErrors.term = "Please enter a valid term (1-360 months)";
       isValid = false;
     }
@@ -46,7 +47,7 @@ const ApplyLoanScreen: React.FC = ({ navigation }: any) => {
         await dispatch(
           applyForLoan({
             amount: parseFloat(amount),
-            term: parseInt(term),
+            term: parseInt(term, 10),
             purpose,
           }),
         ).unwrap();

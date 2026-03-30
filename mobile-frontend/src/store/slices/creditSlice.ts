@@ -1,6 +1,10 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 import { creditApi } from "../../services/api";
-import { CreditScore, Loan } from "../../types";
+import type { CreditScore, Loan } from "../../types";
 
 interface CreditState {
   creditScore: CreditScore | null;

@@ -1,15 +1,16 @@
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  Switch,
-  TouchableOpacity,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import Card from "../../components/common/Card";
 import Button from "../../components/common/Button";
+import Card from "../../components/common/Card";
 
 const SettingsScreen: React.FC = ({ navigation }: any) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);

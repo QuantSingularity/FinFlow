@@ -1,17 +1,18 @@
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
 import {
+  Alert,
+  ScrollView,
   StyleSheet,
-  View,
   Text,
   TouchableOpacity,
-  ScrollView,
-  Alert,
+  View,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { register } from "../../store/slices/authSlice";
-import InputField from "../../components/common/InputField";
 import Button from "../../components/common/Button";
+import InputField from "../../components/common/InputField";
+import type { AppDispatch, RootState } from "../../store";
+import { register } from "../../store/slices/authSlice";
 
 const RegisterScreen: React.FC = ({ navigation }: any) => {
   const [firstName, setFirstName] = useState("");

@@ -1,15 +1,16 @@
-import React, { useEffect } from "react";
+import type React from "react";
+import { useEffect } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
   ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { fetchBalanceSheet } from "../../store/slices/accountingSlice";
 import Card from "../../components/common/Card";
+import type { AppDispatch, RootState } from "../../store";
+import { fetchBalanceSheet } from "../../store/slices/accountingSlice";
 
 const BalanceSheetScreen: React.FC = ({ route }: any) => {
   const { date } = route.params || {};

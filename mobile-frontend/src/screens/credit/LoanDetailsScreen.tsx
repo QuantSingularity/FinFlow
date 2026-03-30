@@ -1,17 +1,18 @@
-import React, { useEffect } from "react";
+import type React from "react";
+import { useEffect } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
   ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { fetchLoanById } from "../../store/slices/creditSlice";
-import Card from "../../components/common/Card";
 import Button from "../../components/common/Button";
+import Card from "../../components/common/Card";
 import ErrorState from "../../components/common/ErrorState";
+import type { AppDispatch, RootState } from "../../store";
+import { fetchLoanById } from "../../store/slices/creditSlice";
 
 const LoanDetailsScreen: React.FC = ({ route, navigation }: any) => {
   const { id } = route.params;

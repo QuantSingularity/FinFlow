@@ -1,6 +1,14 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 import { paymentsApi } from "../../services/api";
-import { Transaction, PaymentRequest, PaginatedResponse } from "../../types";
+import type {
+  PaginatedResponse,
+  PaymentRequest,
+  Transaction,
+} from "../../types";
 
 interface PaymentsState {
   transactions: Transaction[];

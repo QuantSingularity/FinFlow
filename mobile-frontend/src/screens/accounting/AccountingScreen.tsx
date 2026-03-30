@@ -1,10 +1,10 @@
-import React from "react";
+import type React from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
   ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
+  View,
 } from "react-native";
 import Card from "../../components/common/Card";
 

@@ -1,11 +1,12 @@
-import React, { useState } from "react";
-import { StyleSheet, View, Text, ScrollView, Alert } from "react-native";
+import type React from "react";
+import { useState } from "react";
+import { Alert, ScrollView, StyleSheet, Text } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { createPayment } from "../../store/slices/paymentsSlice";
-import InputField from "../../components/common/InputField";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
+import InputField from "../../components/common/InputField";
+import type { AppDispatch, RootState } from "../../store";
+import { createPayment } from "../../store/slices/paymentsSlice";
 
 const CreatePaymentScreen: React.FC = ({ navigation }: any) => {
   const [amount, setAmount] = useState("");
@@ -29,7 +30,7 @@ const CreatePaymentScreen: React.FC = ({ navigation }: any) => {
     if (!amount) {
       setAmountError("Amount is required");
       isValid = false;
-    } else if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+    } else if (Number.isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       setAmountError("Amount must be a positive number");
       isValid = false;
     } else {

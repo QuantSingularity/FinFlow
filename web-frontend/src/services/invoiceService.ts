@@ -1,5 +1,5 @@
+import type { Invoice } from "../types";
 import api from "./api";
-import { Invoice } from "../types";
 
 export const getInvoices = async (): Promise<Invoice[]> => {
   const response = await api.get("/accounting/invoices");

@@ -1,6 +1,6 @@
-import React from "react";
-import { StyleSheet, View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import type React from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 interface MetricCardProps {
   title: string;

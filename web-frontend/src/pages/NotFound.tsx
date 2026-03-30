@@ -1,8 +1,8 @@
-import React from "react";
 import { motion } from "framer-motion";
+import { FileQuestion } from "lucide-react";
+import type React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
-import { FileQuestion } from "lucide-react";
 
 const NotFound: React.FC = () => {
   return (

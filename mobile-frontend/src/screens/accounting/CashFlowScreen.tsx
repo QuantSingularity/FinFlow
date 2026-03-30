@@ -1,16 +1,17 @@
-import React, { useEffect } from "react";
+import type React from "react";
+import { useEffect } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
   ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { fetchCashFlowStatement } from "../../store/slices/accountingSlice";
 import Card from "../../components/common/Card";
 import ErrorState from "../../components/common/ErrorState";
+import type { AppDispatch, RootState } from "../../store";
+import { fetchCashFlowStatement } from "../../store/slices/accountingSlice";
 
 const CashFlowScreen: React.FC = ({ route }: any) => {
   const dispatch = useDispatch<AppDispatch>();

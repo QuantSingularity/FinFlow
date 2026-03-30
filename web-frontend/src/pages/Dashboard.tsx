@@ -1,29 +1,30 @@
-import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  BarChart,
-  Bar,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
-  PieChart,
-  Pie,
-} from "recharts";
 import { motion } from "framer-motion";
 import {
-  ArrowUpRight,
-  ArrowDownRight,
-  DollarSign,
-  CreditCard,
-  FileText,
   Activity, // TrendingUp, Calendar
+  ArrowDownRight,
+  ArrowUpRight,
+  CreditCard,
+  DollarSign,
+  FileText,
 } from "lucide-react";
+import type React from "react";
+import { useState } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 // Sample data for charts
 const sampleRevenueData = [

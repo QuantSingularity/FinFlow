@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
   Button,
@@ -13,6 +11,8 @@ import {
   Text,
   useToast,
 } from "@chakra-ui/react";
+import { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { createPayment, getProcessorConfigs } from "../services/paymentService";
 import { ProcessorType } from "../types";
 
@@ -44,14 +44,14 @@ const loadSquareScript = (applicationId, locationId) => {
 };
 
 const PaymentForm = () => {
-  const dispatch = useDispatch();
+  const _dispatch = useDispatch();
   const toast = useToast();
   const { user } = useSelector((state) => state.auth);
 
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("usd");
   const [processorType, setProcessorType] = useState(ProcessorType.STRIPE);
-  const [processorConfigs, setProcessorConfigs] = useState({});
+  const [_processorConfigs, setProcessorConfigs] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [stripeElements, setStripeElements] = useState(null);
   const [paypalInstance, setPaypalInstance] = useState(null);

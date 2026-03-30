@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../store";
+import type { AppDispatch, RootState } from "../store";
 import { fetchTransactions } from "../store/slices/paymentsSlice";
 
 export const usePayments = (limit: number = 10) => {
@@ -12,7 +12,7 @@ export const usePayments = (limit: number = 10) => {
 
   useEffect(() => {
     loadTransactions();
-  }, [currentPage, limit]);
+  }, [loadTransactions]);
 
   const loadTransactions = () => {
     dispatch(fetchTransactions({ page: currentPage, limit }));

@@ -1,15 +1,16 @@
-import React, { useEffect } from "react";
+import type React from "react";
+import { useEffect } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
   ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { fetchCreditScore } from "../../store/slices/creditSlice";
 import Card from "../../components/common/Card";
+import type { AppDispatch, RootState } from "../../store";
+import { fetchCreditScore } from "../../store/slices/creditSlice";
 
 const CreditScoreScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();

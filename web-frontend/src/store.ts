@@ -1,9 +1,9 @@
 import { configureStore } from "@reduxjs/toolkit";
+import analyticsReducer from "./slices/analyticsSlice";
 import authReducer from "./slices/authSlice";
-import transactionReducer from "./slices/transactionSlice";
 import invoiceReducer from "./slices/invoiceSlice";
 import paymentReducer from "./slices/paymentSlice";
-import analyticsReducer from "./slices/analyticsSlice";
+import transactionReducer from "./slices/transactionSlice";
 import uiReducer from "./slices/uiSlice";
 
 export const store = configureStore({

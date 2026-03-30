@@ -1,6 +1,6 @@
-import React from "react";
-import { StyleSheet, View, Text, FlatList } from "react-native";
-import { Transaction } from "../../types";
+import type React from "react";
+import { FlatList, StyleSheet, Text, View } from "react-native";
+import type { Transaction } from "../../types";
 import Card from "../common/Card";
 
 interface TransactionListProps {
@@ -40,7 +40,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
     const formattedDate = new Date(item.createdAt).toLocaleDateString();
 
     return (
-      <Card onPress={() => onPress && onPress(item.id)}>
+      <Card onPress={() => onPress?.(item.id)}>
         <View style={styles.transactionItem}>
           <View style={styles.transactionInfo}>
             <Text style={styles.transactionId}>

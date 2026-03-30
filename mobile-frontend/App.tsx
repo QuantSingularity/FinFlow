@@ -1,10 +1,10 @@
-import React, { useEffect } from "react";
-import { StyleSheet } from "react-native";
-import { Provider, useDispatch } from "react-redux";
-import { store } from "./src/store";
-import { AppNavigator } from "./src/navigation/AppNavigator";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import { StyleSheet } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Provider, useDispatch } from "react-redux";
+import { AppNavigator } from "./src/navigation/AppNavigator";
+import { store } from "./src/store";
 import { checkAuth } from "./src/store/slices/authSlice";
 
 // App content with auth check
@@ -35,7 +35,7 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
+const _styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",

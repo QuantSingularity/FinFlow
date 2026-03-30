@@ -1,14 +1,14 @@
-import React from "react";
+import type React from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
   ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
+  View,
 } from "react-native";
 import { useSelector } from "react-redux";
-import { RootState } from "../../store";
 import Card from "../../components/common/Card";
+import type { RootState } from "../../store";
 
 const CreditScreen: React.FC = ({ navigation }: any) => {
   const { creditScore } = useSelector((state: RootState) => state.credit);

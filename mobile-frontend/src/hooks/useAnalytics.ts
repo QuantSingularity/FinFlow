@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../store";
+import type { AppDispatch, RootState } from "../store";
 import { fetchDashboardMetrics } from "../store/slices/analyticsSlice";
 
 export const useAnalytics = (
-  period: "daily" | "weekly" | "monthly" | "yearly" = "monthly",
+  _period: "daily" | "weekly" | "monthly" | "yearly" = "monthly",
 ) => {
   const dispatch = useDispatch<AppDispatch>();
   const {
@@ -17,7 +17,7 @@ export const useAnalytics = (
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [loadDashboardData]);
 
   const loadDashboardData = () => {
     dispatch(fetchDashboardMetrics());

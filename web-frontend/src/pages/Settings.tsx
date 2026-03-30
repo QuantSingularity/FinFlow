@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../store";
-import Layout from "../components/common/Layout";
-import { toggleDarkMode } from "../store/uiSlice";
-import { logout } from "../store/authSlice";
 import { useNavigate } from "react-router-dom";
+import Layout from "../components/common/Layout";
+import type { AppDispatch, RootState } from "../store";
+import { logout } from "../store/authSlice";
+import { toggleDarkMode } from "../store/uiSlice";
 
 const Settings: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();

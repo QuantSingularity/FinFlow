@@ -1,7 +1,11 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ApiError, ApiResponse } from "../types";
+import axios, {
+  type AxiosError,
+  type AxiosInstance,
+  type AxiosRequestConfig,
+} from "axios";
 import Constants from "expo-constants";
+import type { ApiError, ApiResponse } from "../types";
 
 // Base API configuration
 // For Android emulator, use 10.0.2.2 instead of localhost

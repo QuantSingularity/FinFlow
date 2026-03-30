@@ -1,6 +1,6 @@
-import { describe, test, expect, jest, beforeEach } from "@jest/globals";
-import paymentService from "../paymentService";
+import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import axios from "axios";
+import paymentService from "../paymentService";
 
 // Mock axios
 jest.mock("axios");

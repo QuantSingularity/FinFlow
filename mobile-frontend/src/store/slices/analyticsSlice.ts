@@ -1,6 +1,10 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 import { analyticsApi } from "../../services/api";
-import { AnalyticsMetric } from "../../types";
+import type { AnalyticsMetric } from "../../types";
 
 interface AnalyticsState {
   dashboardMetrics: Record<string, any>;
