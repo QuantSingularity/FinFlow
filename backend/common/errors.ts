@@ -1,4 +1,4 @@
-class HttpError extends Error {
+export class HttpError extends Error {
   statusCode: number;
 
   constructor(statusCode: number, message: string) {
@@ -20,9 +20,21 @@ export class UnauthorizedError extends HttpError {
   }
 }
 
+export class ForbiddenError extends HttpError {
+  constructor(message = "Forbidden") {
+    super(403, message);
+  }
+}
+
 export class NotFoundError extends HttpError {
   constructor(message = "Not Found") {
     super(404, message);
+  }
+}
+
+export class ConflictError extends HttpError {
+  constructor(message = "Conflict") {
+    super(409, message);
   }
 }
 

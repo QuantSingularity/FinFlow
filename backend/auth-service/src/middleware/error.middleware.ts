@@ -1,14 +1,13 @@
 import { Request, Response, NextFunction } from "express";
-import { logger } from "./logger.middleware";
+import logger from "../../../../common/logger";
+import { HttpError } from "../../../../common/errors";
 
-// Error handling middleware
 const errorMiddleware = (
-  error: Error,
+  error: any,
   req: Request,
   res: Response,
   next: NextFunction,
 ): void => {
-  // Log error
   logger.error({
     message: "Error occurred",
     error: {
@@ -20,32 +19,31 @@ const errorMiddleware = (
     path: req.path,
   });
 
-  // Determine status code based on error type
-  let statusCode = 500;
-  let errorMessage = "Internal Server Error";
-
-  // Handle specific error types
-  if (error.name === "ValidationError") {
-    statusCode = 400;
-    errorMessage = error.message;
-  } else if (error.name === "UnauthorizedError") {
-    statusCode = 401;
-    errorMessage = "Unauthorized: Invalid or expired token";
-  } else if (error.name === "ForbiddenError") {
-    statusCode = 403;
-    errorMessage = "Forbidden: Insufficient permissions";
-  } else if (error.name === "NotFoundError") {
-    statusCode = 404;
-    errorMessage = error.message || "Resource not found";
+  if (error instanceof HttpError) {
+    res.status(error.statusCode).json({
+      error: { message: error.message, status: error.statusCode },
+    });
+    return;
   }
 
-  // Send error response
-  res.status(statusCode).json({
-    error: {
-      message: errorMessage,
-      status: statusCode,
-    },
-  });
+  if (
+    error.name === "JsonWebTokenError" ||
+    error.name === "TokenExpiredError"
+  ) {
+    res
+      .status(401)
+      .json({ error: { message: "Invalid or expired token", status: 401 } });
+    return;
+  }
+
+  if (error.name === "ValidationError") {
+    res.status(400).json({ error: { message: error.message, status: 400 } });
+    return;
+  }
+
+  res
+    .status(500)
+    .json({ error: { message: "Internal Server Error", status: 500 } });
 };
 
 export default errorMiddleware;

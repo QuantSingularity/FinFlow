@@ -1,15 +1,13 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import config from "../../../common/config";
 import jwt from "jsonwebtoken";
-import { TokenPayload } from "../types/auth.types";
+import { TokenPayload } from "../auth.types";
 
-// Hash password
 export const hashPassword = async (password: string): Promise<string> => {
-  const salt = await bcrypt.genSalt(10);
+  const salt = await bcrypt.genSalt(12);
   return bcrypt.hash(password, salt);
 };
 
-// Compare password with hash
 export const comparePassword = async (
   password: string,
   hash: string,
@@ -17,16 +15,16 @@ export const comparePassword = async (
   return bcrypt.compare(password, hash);
 };
 
-// Generate JWT token
 export const generateToken = (
   userId: string,
   role: string,
   expiresIn: string = config.jwt.expiresIn,
 ): string => {
-  return jwt.sign({ sub: userId, role }, config.jwt.secret, { expiresIn });
+  return jwt.sign({ sub: userId, role }, config.jwt.secret, {
+    expiresIn,
+  } as any);
 };
 
-// Verify JWT token
 export const verifyToken = (token: string): TokenPayload => {
   return jwt.verify(token, config.jwt.secret) as TokenPayload;
 };

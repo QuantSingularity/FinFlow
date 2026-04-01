@@ -1,0 +1,85 @@
+version: "3.9"
+
+# ============================================================
+# Development overrides — hot reload, exposed ports, debug
+# ============================================================
+
+services:
+  auth-service:
+    build:
+      target: builder
+    command: npm run start:dev
+    volumes:
+      - ./auth-service/src:/app/src:ro
+      - ./common:/app/../common:ro
+    environment:
+      NODE_ENV: development
+
+  payments-service:
+    build:
+      target: builder
+    command: npm run start:dev
+    volumes:
+      - ./payments-service/src:/app/src:ro
+      - ./common:/app/../common:ro
+    environment:
+      NODE_ENV: development
+
+  accounting-service:
+    build:
+      target: builder
+    command: npm run start:dev
+    volumes:
+      - ./accounting-service/src:/app/src:ro
+      - ./common:/app/../common:ro
+    environment:
+      NODE_ENV: development
+
+  analytics-service:
+    build:
+      target: builder
+    command: npm run start:dev
+    volumes:
+      - ./analytics-service/src:/app/src:ro
+      - ./common:/app/../common:ro
+    environment:
+      NODE_ENV: development
+
+  credit-engine:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./credit-engine/src:/app/src:ro
+    environment:
+      ENV: development
+
+  transaction-service-py:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8001 --reload
+    volumes:
+      - ./transaction-service/src:/app/src:ro
+    environment:
+      ENV: development
+
+  ai-features-service:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8002 --reload
+    volumes:
+      - ./ai-features-service/src:/app/src:ro
+    environment:
+      ENV: development
+
+  compliance-service:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8003 --reload
+    volumes:
+      - ./compliance-service/src:/app/src:ro
+    environment:
+      ENV: development
+
+  tax-automation:
+    command: python -u tax_api_service.py
+    volumes:
+      - ./tax_automation:/app:ro
+    environment:
+      ENV: development
+
+  # Expose Kafka UI in development
+  kafka-ui:
+    profiles: []

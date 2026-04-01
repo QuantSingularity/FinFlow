@@ -7,8 +7,8 @@ import {
 } from "../../../common/errors";
 import config from "../../../common/config";
 import jwt from "jsonwebtoken";
-import userService from "./user.service";
-import { comparePassword } from "../utils/password.utils";
+import userModel from "./models/user.model";
+import { comparePassword, hashPassword } from "./utils/password.utils";
 import {
   LoginDTO,
   RegisterDTO,
@@ -17,26 +17,20 @@ import {
   TokenPayload,
   OAuthProviderType,
   OAuthLoginDTO,
-} from "../types/auth.types";
-import { UserCreateInput } from "../types/user.types";
-import { hashPassword } from "../utils/password.utils";
+} from "./auth.types";
+import { UserCreateInput } from "./types/user.types";
 import logger from "../../../common/logger";
-import { sendMessage } from "../config/kafka";
+import { sendMessage } from "../../../common/kafka";
 import axios from "axios";
-import crypto from "crypto";
-import { auditLog } from "../utils/audit.utils";
+import { auditLog } from "./utils/audit.utils";
 
 class AuthService {
-  // Register a new user
   async register(registerDto: RegisterDTO): Promise<User & AuthTokens> {
     try {
-      // Validate password strength
       this.validatePasswordStrength(registerDto.password);
 
-      // Hash password
       const hashedPassword = await hashPassword(registerDto.password);
 
-      // Create user
       const userData: UserCreateInput = {
         email: registerDto.email,
         hashedPassword,
@@ -44,58 +38,46 @@ class AuthService {
         lastName: registerDto.lastName,
       };
 
-      const user = await userService.create(userData);
+      const existing = await userModel.findByEmail(registerDto.email);
+      if (existing) {
+        throw new BadRequestError("Email already in use");
+      }
 
-      // Generate tokens
+      const user = await userModel.create(userData);
+
       const accessToken = this.generateAccessToken(user.id, user.role);
       const refreshToken = this.generateRefreshToken(user.id, user.role);
 
-      // Save refresh token to database
-      await userService.updateRefreshToken(user.id, refreshToken);
-
-      // Publish user_created event to Kafka
+      await userModel.updateRefreshToken(user.id, refreshToken);
       await this.publishUserCreatedEvent(user);
 
-      // Log the registration event
       await auditLog({
         action: "USER_REGISTER",
         userId: user.id,
         resourceType: "USER",
         resourceId: user.id,
-        metadata: {
-          email: user.email,
-          ipAddress: registerDto.ipAddress,
-        },
+        metadata: { email: user.email, ipAddress: registerDto.ipAddress },
       });
 
-      // Return user data and tokens
-      return {
-        ...user,
-        accessToken,
-        refreshToken,
-      };
+      return { ...user, accessToken, refreshToken };
     } catch (error) {
       logger.error(`Error registering user: ${error}`);
       throw error;
     }
   }
 
-  // Login user
   async login(loginDto: LoginDTO): Promise<User & AuthTokens> {
     try {
-      // Find user by email
-      const user = await userService.findByEmail(loginDto.email);
+      const user = await userModel.findByEmail(loginDto.email);
       if (!user) {
         throw new UnauthorizedError("Invalid credentials");
       }
 
-      // Verify password
       const isPasswordValid = await comparePassword(
         loginDto.password,
-        user.hashedPassword,
+        user.hashedPassword || "",
       );
       if (!isPasswordValid) {
-        // Log failed login attempt
         await auditLog({
           action: "LOGIN_FAILED",
           resourceType: "USER",
@@ -106,47 +88,33 @@ class AuthService {
             ipAddress: loginDto.ipAddress,
           },
         });
-
         throw new UnauthorizedError("Invalid credentials");
       }
 
-      // Generate tokens
       const accessToken = this.generateAccessToken(user.id, user.role);
       const refreshToken = this.generateRefreshToken(user.id, user.role);
 
-      // Save refresh token to database
-      await userService.updateRefreshToken(user.id, refreshToken);
+      await userModel.updateRefreshToken(user.id, refreshToken);
 
-      // Log successful login
       await auditLog({
         action: "LOGIN_SUCCESS",
         userId: user.id,
         resourceType: "USER",
         resourceId: user.id,
-        metadata: {
-          email: user.email,
-          ipAddress: loginDto.ipAddress,
-        },
+        metadata: { email: user.email, ipAddress: loginDto.ipAddress },
       });
 
-      // Return user data and tokens
-      return {
-        ...user,
-        accessToken,
-        refreshToken,
-      };
+      return { ...user, accessToken, refreshToken };
     } catch (error) {
       logger.error(`Error logging in user: ${error}`);
       throw error;
     }
   }
 
-  // OAuth login/registration
   async oauthLogin(oauthLoginDto: OAuthLoginDTO): Promise<User & AuthTokens> {
     try {
       const { provider, code, redirectUri, ipAddress } = oauthLoginDto;
 
-      // Get user profile from OAuth provider
       const profile = await this.getOAuthUserProfile(
         provider,
         code,
@@ -157,11 +125,9 @@ class AuthService {
         throw new OAuthError("Failed to get user profile from OAuth provider");
       }
 
-      // Check if user exists
-      let user = await userService.findByEmail(profile.email);
+      let user = await userModel.findByEmail(profile.email);
 
       if (!user) {
-        // Create new user if not exists
         const userData: UserCreateInput = {
           email: profile.email,
           firstName: profile.firstName || "",
@@ -169,66 +135,48 @@ class AuthService {
           oauthProvider: provider,
           oauthId: profile.id,
         };
-
-        user = await userService.create(userData);
-
-        // Publish user_created event to Kafka
+        user = await userModel.create(userData);
         await this.publishUserCreatedEvent(user);
       } else if (!user.oauthProvider || user.oauthProvider !== provider) {
-        // Link existing user with OAuth provider
-        user = await userService.update(user.id, {
+        user = await userModel.update(user.id, {
           oauthProvider: provider,
           oauthId: profile.id,
         });
       }
 
-      // Generate tokens
       const accessToken = this.generateAccessToken(user.id, user.role);
       const refreshToken = this.generateRefreshToken(user.id, user.role);
 
-      // Save refresh token to database
-      await userService.updateRefreshToken(user.id, refreshToken);
+      await userModel.updateRefreshToken(user.id, refreshToken);
 
-      // Log OAuth login
       await auditLog({
         action: "OAUTH_LOGIN",
         userId: user.id,
         resourceType: "USER",
         resourceId: user.id,
-        metadata: {
-          email: user.email,
-          provider,
-          ipAddress,
-        },
+        metadata: { email: user.email, provider, ipAddress },
       });
 
-      // Return user data and tokens
-      return {
-        ...user,
-        accessToken,
-        refreshToken,
-      };
+      return { ...user, accessToken, refreshToken };
     } catch (error) {
       logger.error(`Error in OAuth login: ${error}`);
       throw error;
     }
   }
 
-  // Refresh access token
   async refreshToken(refreshTokenDto: RefreshTokenDTO): Promise<AuthTokens> {
     try {
       const { refreshToken, ipAddress } = refreshTokenDto;
 
-      // Verify refresh token
-      const decoded = jwt.verify(
-        refreshToken,
-        config.jwt.secret,
-      ) as TokenPayload;
+      let decoded: TokenPayload;
+      try {
+        decoded = jwt.verify(refreshToken, config.jwt.secret) as TokenPayload;
+      } catch {
+        throw new UnauthorizedError("Invalid refresh token");
+      }
 
-      // Find user by ID
-      const user = await userService.findById(decoded.sub);
+      const user = await userModel.findById(decoded.sub);
       if (!user || user.refreshToken !== refreshToken) {
-        // Log invalid refresh token attempt
         await auditLog({
           action: "TOKEN_REFRESH_FAILED",
           resourceType: "TOKEN",
@@ -238,43 +186,31 @@ class AuthService {
             ipAddress,
           },
         });
-
         throw new UnauthorizedError("Invalid refresh token");
       }
 
-      // Generate new access token
       const accessToken = this.generateAccessToken(user.id, user.role);
+      const newRefreshToken = this.generateRefreshToken(user.id, user.role);
 
-      // Log successful token refresh
+      await userModel.updateRefreshToken(user.id, newRefreshToken);
+
       await auditLog({
         action: "TOKEN_REFRESH_SUCCESS",
         userId: user.id,
         resourceType: "TOKEN",
-        metadata: {
-          ipAddress,
-        },
+        metadata: { ipAddress },
       });
 
-      // Return new access token
-      return { accessToken };
+      return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
       logger.error(`Error refreshing token: ${error}`);
-
-      if (error instanceof jwt.JsonWebTokenError) {
-        throw new UnauthorizedError("Invalid refresh token");
-      }
-
       throw error;
     }
   }
 
-  // Logout user
   async logout(userId: string, ipAddress?: string): Promise<void> {
     try {
-      // Clear refresh token in database
-      await userService.updateRefreshToken(userId, null);
-
-      // Log logout
+      await userModel.updateRefreshToken(userId, null);
       await auditLog({
         action: "LOGOUT",
         userId,
@@ -288,7 +224,6 @@ class AuthService {
     }
   }
 
-  // Change password
   async changePassword(
     userId: string,
     currentPassword: string,
@@ -296,46 +231,32 @@ class AuthService {
     ipAddress?: string,
   ): Promise<void> {
     try {
-      // Find user
-      const user = await userService.findById(userId);
+      const user = await userModel.findById(userId);
       if (!user) {
         throw new NotFoundError("User not found");
       }
 
-      // Verify current password
       const isPasswordValid = await comparePassword(
         currentPassword,
-        user.hashedPassword,
+        user.hashedPassword || "",
       );
       if (!isPasswordValid) {
-        // Log failed password change attempt
         await auditLog({
           action: "PASSWORD_CHANGE_FAILED",
           userId,
           resourceType: "USER",
           resourceId: userId,
-          metadata: {
-            reason: "INVALID_CURRENT_PASSWORD",
-            ipAddress,
-          },
+          metadata: { reason: "INVALID_CURRENT_PASSWORD", ipAddress },
         });
-
         throw new UnauthorizedError("Current password is incorrect");
       }
 
-      // Validate new password strength
       this.validatePasswordStrength(newPassword);
 
-      // Hash new password
       const hashedPassword = await hashPassword(newPassword);
+      await userModel.update(userId, { hashedPassword });
+      await userModel.updateRefreshToken(userId, null);
 
-      // Update user password
-      await userService.update(userId, { hashedPassword });
-
-      // Invalidate all refresh tokens
-      await userService.updateRefreshToken(userId, null);
-
-      // Log password change
       await auditLog({
         action: "PASSWORD_CHANGED",
         userId,
@@ -349,47 +270,35 @@ class AuthService {
     }
   }
 
-  // Helper method to generate access token
   private generateAccessToken(userId: string, role: string): string {
     return jwt.sign({ sub: userId, role }, config.jwt.secret, {
       expiresIn: config.jwt.expiresIn,
-    });
+    } as any);
   }
 
-  // Helper method to generate refresh token
   private generateRefreshToken(userId: string, role: string): string {
     return jwt.sign({ sub: userId, role }, config.jwt.secret, {
       expiresIn: config.jwt.refreshExpiresIn,
-    });
+    } as any);
   }
 
-  // Helper method to validate password strength
   private validatePasswordStrength(password: string): void {
-    // Password must be at least 8 characters long
     if (password.length < 8) {
       throw new BadRequestError("Password must be at least 8 characters long");
     }
-
-    // Password must contain at least one uppercase letter
     if (!/[A-Z]/.test(password)) {
       throw new BadRequestError(
         "Password must contain at least one uppercase letter",
       );
     }
-
-    // Password must contain at least one lowercase letter
     if (!/[a-z]/.test(password)) {
       throw new BadRequestError(
         "Password must contain at least one lowercase letter",
       );
     }
-
-    // Password must contain at least one number
     if (!/[0-9]/.test(password)) {
       throw new BadRequestError("Password must contain at least one number");
     }
-
-    // Password must contain at least one special character
     if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
       throw new BadRequestError(
         "Password must contain at least one special character",
@@ -397,7 +306,6 @@ class AuthService {
     }
   }
 
-  // Helper method to get user profile from OAuth provider
   private async getOAuthUserProfile(
     provider: OAuthProviderType,
     code: string,
@@ -408,187 +316,93 @@ class AuthService {
     firstName?: string;
     lastName?: string;
   }> {
-    try {
-      switch (provider) {
-        case OAuthProviderType.GOOGLE:
-          return await this.getGoogleUserProfile(code, redirectUri);
-        case OAuthProviderType.GITHUB:
-          return await this.getGithubUserProfile(code, redirectUri);
-        case OAuthProviderType.MICROSOFT:
-          return await this.getMicrosoftUserProfile(code, redirectUri);
-        default:
-          throw new BadRequestError(`Unsupported OAuth provider: ${provider}`);
-      }
-    } catch (error) {
-      logger.error(`Error getting OAuth user profile: ${error}`);
-      throw error;
+    switch (provider) {
+      case OAuthProviderType.GOOGLE:
+        return this.getGoogleUserProfile(code, redirectUri);
+      case OAuthProviderType.GITHUB:
+        return this.getGithubUserProfile(code, redirectUri);
+      case OAuthProviderType.MICROSOFT:
+        return this.getMicrosoftUserProfile(code, redirectUri);
+      default:
+        throw new BadRequestError(`Unsupported OAuth provider: ${provider}`);
     }
   }
 
-  // Get Google user profile
-  private async getGoogleUserProfile(
-    code: string,
-    redirectUri: string,
-  ): Promise<{
-    id: string;
-    email: string;
-    firstName?: string;
-    lastName?: string;
-  }> {
-    try {
-      // Exchange authorization code for tokens
-      const tokenResponse = await axios.post(
-        "https://oauth2.googleapis.com/token",
-        {
-          code,
-          client_id: process.env.GOOGLE_CLIENT_ID,
-          client_secret: process.env.GOOGLE_CLIENT_SECRET,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        },
-      );
-
-      const { access_token } = tokenResponse.data;
-
-      // Get user profile
-      const profileResponse = await axios.get(
-        "https://www.googleapis.com/oauth2/v3/userinfo",
-        {
-          headers: { Authorization: `Bearer ${access_token}` },
-        },
-      );
-
-      const { sub, email, given_name, family_name } = profileResponse.data;
-
-      return {
-        id: sub,
-        email,
-        firstName: given_name,
-        lastName: family_name,
-      };
-    } catch (error) {
-      logger.error(`Error getting Google user profile: ${error}`);
-      throw error;
-    }
+  private async getGoogleUserProfile(code: string, redirectUri: string) {
+    const tokenResponse = await axios.post(
+      "https://oauth2.googleapis.com/token",
+      {
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      },
+    );
+    const { access_token } = tokenResponse.data;
+    const profileResponse = await axios.get(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      { headers: { Authorization: `Bearer ${access_token}` } },
+    );
+    const { sub, email, given_name, family_name } = profileResponse.data;
+    return { id: sub, email, firstName: given_name, lastName: family_name };
   }
 
-  // Get GitHub user profile
-  private async getGithubUserProfile(
-    code: string,
-    redirectUri: string,
-  ): Promise<{
-    id: string;
-    email: string;
-    firstName?: string;
-    lastName?: string;
-  }> {
-    try {
-      // Exchange authorization code for access token
-      const tokenResponse = await axios.post(
-        "https://github.com/login/oauth/access_token",
-        {
-          client_id: process.env.GITHUB_CLIENT_ID,
-          client_secret: process.env.GITHUB_CLIENT_SECRET,
-          code,
-          redirect_uri: redirectUri,
-        },
-        {
-          headers: { Accept: "application/json" },
-        },
-      );
-
-      const { access_token } = tokenResponse.data;
-
-      // Get user profile
-      const profileResponse = await axios.get("https://api.github.com/user", {
+  private async getGithubUserProfile(code: string, redirectUri: string) {
+    const tokenResponse = await axios.post(
+      "https://github.com/login/oauth/access_token",
+      {
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code,
+        redirect_uri: redirectUri,
+      },
+      { headers: { Accept: "application/json" } },
+    );
+    const { access_token } = tokenResponse.data;
+    const profileResponse = await axios.get("https://api.github.com/user", {
+      headers: { Authorization: `token ${access_token}` },
+    });
+    const emailResponse = await axios.get(
+      "https://api.github.com/user/emails",
+      {
         headers: { Authorization: `token ${access_token}` },
-      });
-
-      // Get user email (GitHub might not include email in profile)
-      const emailResponse = await axios.get(
-        "https://api.github.com/user/emails",
-        {
-          headers: { Authorization: `token ${access_token}` },
-        },
-      );
-
-      const primaryEmail = emailResponse.data.find(
-        (email: any) => email.primary,
-      )?.email;
-
-      const { id, name } = profileResponse.data;
-
-      // Split name into first and last name (best effort)
-      let firstName, lastName;
-      if (name) {
-        const nameParts = name.split(" ");
-        firstName = nameParts[0];
-        lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
-      }
-
-      return {
-        id: id.toString(),
-        email: primaryEmail,
-        firstName,
-        lastName,
-      };
-    } catch (error) {
-      logger.error(`Error getting GitHub user profile: ${error}`);
-      throw error;
+      },
+    );
+    const primaryEmail = emailResponse.data.find((e: any) => e.primary)?.email;
+    const { id, name } = profileResponse.data;
+    let firstName, lastName;
+    if (name) {
+      const parts = name.split(" ");
+      firstName = parts[0];
+      lastName = parts.length > 1 ? parts.slice(1).join(" ") : "";
     }
+    return { id: id.toString(), email: primaryEmail, firstName, lastName };
   }
 
-  // Get Microsoft user profile
-  private async getMicrosoftUserProfile(
-    code: string,
-    redirectUri: string,
-  ): Promise<{
-    id: string;
-    email: string;
-    firstName?: string;
-    lastName?: string;
-  }> {
-    try {
-      // Exchange authorization code for access token
-      const tokenResponse = await axios.post(
-        "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-        new URLSearchParams({
-          client_id: process.env.MICROSOFT_CLIENT_ID || "",
-          client_secret: process.env.MICROSOFT_CLIENT_SECRET || "",
-          code,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
-        {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        },
-      );
-
-      const { access_token } = tokenResponse.data;
-
-      // Get user profile
-      const profileResponse = await axios.get(
-        "https://graph.microsoft.com/v1.0/me",
-        {
-          headers: { Authorization: `Bearer ${access_token}` },
-        },
-      );
-
-      const { id, mail, givenName, surname } = profileResponse.data;
-
-      return {
-        id,
-        email: mail,
-        firstName: givenName,
-        lastName: surname,
-      };
-    } catch (error) {
-      logger.error(`Error getting Microsoft user profile: ${error}`);
-      throw error;
-    }
+  private async getMicrosoftUserProfile(code: string, redirectUri: string) {
+    const tokenResponse = await axios.post(
+      "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+      new URLSearchParams({
+        client_id: process.env.MICROSOFT_CLIENT_ID || "",
+        client_secret: process.env.MICROSOFT_CLIENT_SECRET || "",
+        code,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
+    );
+    const { access_token } = tokenResponse.data;
+    const profileResponse = await axios.get(
+      "https://graph.microsoft.com/v1.0/me",
+      {
+        headers: { Authorization: `Bearer ${access_token}` },
+      },
+    );
+    const { id, mail, givenName, surname } = profileResponse.data;
+    return { id, email: mail, firstName: givenName, lastName: surname };
   }
 
-  // Publish user_created event to Kafka
   private async publishUserCreatedEvent(user: User): Promise<void> {
     try {
       await sendMessage("user_created", {
@@ -599,7 +413,6 @@ class AuthService {
       });
     } catch (error) {
       logger.error(`Error publishing user_created event: ${error}`);
-      // Don't throw error, just log it
     }
   }
 }

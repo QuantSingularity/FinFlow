@@ -1,37 +1,35 @@
 import logging
+import os
 from datetime import datetime
 from decimal import Decimal
+from typing import Dict
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-# Corrected import block for international_compliance
-from .international_compliance import (
+from international_compliance import (
     ComplianceCheckType,
     InternationalComplianceManager,
 )
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 compliance_app = Flask(__name__)
-CORS(compliance_app)  # Enable CORS for all routes
+CORS(compliance_app)
 
-# Global compliance manager
 compliance_manager: InternationalComplianceManager = None
 
 
 def init_compliance_system():
     """Initialize the compliance system"""
     global compliance_manager
-    # Note: Assumes InternationalComplianceManager can be instantiated without arguments
     compliance_manager = InternationalComplianceManager()
     logger.info("Compliance system initialized")
 
 
 @compliance_app.route("/health", methods=["GET"])
-def health_check() -> Dict[str, str]:
+def health_check():
     """Health check endpoint"""
     return jsonify(
         {
@@ -50,14 +48,14 @@ def create_entity_profile():
             return jsonify({"error": "Compliance system not initialized"}), 503
 
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body is required"}), 400
 
-        # Validate required fields
         required_fields = ["entity_id", "entity_type", "full_name"]
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": f"Missing required field: {field}"}), 400
 
-        # Create entity profile (Assumes this method returns a profile object)
         profile = compliance_manager.create_entity_profile(data)
 
         return (
@@ -65,7 +63,6 @@ def create_entity_profile():
                 {
                     "message": "Entity profile created successfully",
                     "entity_id": profile.entity_id,
-                    # Assuming profile.created_at is a datetime object
                     "created_at": profile.created_at.isoformat(),
                 }
             ),
@@ -84,12 +81,10 @@ def get_entity_profile(entity_id):
         if compliance_manager is None:
             return jsonify({"error": "Compliance system not initialized"}), 503
 
-        # Assuming compliance_manager has a .db attribute with a get_entity_profile method
         profile = compliance_manager.db.get_entity_profile(entity_id)
         if not profile:
             return jsonify({"error": "Entity profile not found"}), 404
 
-        # Conversion logic for response payload
         response = {
             "entity_id": profile.entity_id,
             "entity_type": profile.entity_type,
@@ -106,9 +101,7 @@ def get_entity_profile(entity_id):
             "expected_transaction_volume": (
                 float(profile.expected_transaction_volume)
                 if profile.expected_transaction_volume
-                and isinstance(
-                    profile.expected_transaction_volume, (Decimal, int, float)
-                )
+                and isinstance(profile.expected_transaction_volume, (Decimal, int, float))
                 else None
             ),
             "risk_factors": profile.risk_factors,
@@ -131,15 +124,14 @@ def perform_kyc_check(entity_id):
         if compliance_manager is None:
             return jsonify({"error": "Compliance system not initialized"}), 503
 
-        # Assumes compliance_manager has a kyc_service that returns a result object
         result = compliance_manager.kyc_service.perform_kyc_check(entity_id)
 
         response = {
             "check_id": result.check_id,
             "entity_id": result.entity_id,
-            "check_type": result.check_type.value,  # Assuming enum has .value
-            "status": result.status.value,  # Assuming enum has .value
-            "risk_level": result.risk_level.value,  # Assuming enum has .value
+            "check_type": result.check_type.value,
+            "status": result.status.value,
+            "risk_level": result.risk_level.value,
             "details": result.details,
             "performed_at": result.performed_at.isoformat(),
             "expires_at": result.expires_at.isoformat() if result.expires_at else None,
@@ -160,7 +152,6 @@ def perform_fatca_check(entity_id):
         if compliance_manager is None:
             return jsonify({"error": "Compliance system not initialized"}), 503
 
-        # Assumes compliance_manager has a fatca_service that returns a result object
         result = compliance_manager.fatca_service.check_us_person_status(entity_id)
 
         response = {
@@ -189,27 +180,22 @@ def monitor_transaction():
             return jsonify({"error": "Compliance system not initialized"}), 503
 
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body is required"}), 400
 
-        # Validate required fields
         required_fields = [
-            "transaction_id",
-            "entity_id",
-            "amount",
-            "transaction_type",
-            "origin_country",
-            "destination_country",
+            "transaction_id", "entity_id", "amount", "transaction_type",
+            "origin_country", "destination_country",
         ]
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": f"Missing required field: {field}"}), 400
 
-        # Monitor transaction (Assumes compliance_manager has an aml_service)
         result = compliance_manager.aml_service.monitor_transaction(data)
 
         response = {
             "transaction_id": result.transaction_id,
             "entity_id": result.entity_id,
-            # Ensure amount is a float for JSON serialization if it's a Decimal
             "amount": float(result.amount),
             "currency": result.currency,
             "transaction_type": result.transaction_type,
@@ -226,16 +212,13 @@ def monitor_transaction():
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 
-@compliance_app.route(
-    "/api/compliance/check/comprehensive/<entity_id>", methods=["POST"]
-)
+@compliance_app.route("/api/compliance/check/comprehensive/<entity_id>", methods=["POST"])
 def perform_comprehensive_check(entity_id):
     """Perform comprehensive compliance check"""
     try:
         if compliance_manager is None:
             return jsonify({"error": "Compliance system not initialized"}), 503
 
-        # Assumes this method returns a dict of results
         results = compliance_manager.perform_comprehensive_compliance_check(entity_id)
 
         response = {}
@@ -246,9 +229,7 @@ def perform_comprehensive_check(entity_id):
                 "risk_level": result.risk_level.value,
                 "details": result.details,
                 "performed_at": result.performed_at.isoformat(),
-                "expires_at": (
-                    result.expires_at.isoformat() if result.expires_at else None
-                ),
+                "expires_at": (result.expires_at.isoformat() if result.expires_at else None),
                 "notes": result.notes,
             }
 
@@ -266,7 +247,6 @@ def get_compliance_status(entity_id):
         if compliance_manager is None:
             return jsonify({"error": "Compliance system not initialized"}), 503
 
-        # Assumes this method returns the status dictionary directly
         status = compliance_manager.get_compliance_status(entity_id)
         return jsonify(status)
 
@@ -275,24 +255,18 @@ def get_compliance_status(entity_id):
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 
-@compliance_app.route(
-    "/api/compliance/check/data-residency/<entity_id>", methods=["POST"]
-)
+@compliance_app.route("/api/compliance/check/data-residency/<entity_id>", methods=["POST"])
 def check_data_residency(entity_id):
     """Check data residency compliance"""
     try:
         if compliance_manager is None:
             return jsonify({"error": "Compliance system not initialized"}), 503
 
-        data = request.get_json()
-        # Use .get with a default for optional field
+        data = request.get_json() or {}
         data_location = data.get("data_location", "US")
 
-        # Assumes compliance_manager has a data_residency_service
-        result = (
-            compliance_manager.data_residency_service.check_data_residency_compliance(
-                entity_id, data_location
-            )
+        result = compliance_manager.data_residency_service.check_data_residency_compliance(
+            entity_id, data_location
         )
 
         response = {
@@ -319,30 +293,22 @@ def get_risk_assessment(entity_id):
         if compliance_manager is None:
             return jsonify({"error": "Compliance system not initialized"}), 503
 
-        # Get all compliance checks for the entity (Assuming get_compliance_status works)
         status = compliance_manager.get_compliance_status(entity_id)
 
         if "error" in status:
-            # Propagate error if get_compliance_status returns an error dict
             return jsonify(status), 500
 
-        # Calculate overall risk score
-        # Corrected risk score values to map to the specified risk levels
         risk_scores = {"low": 1, "medium": 2, "high": 3, "critical": 4}
-
         total_risk = 0
         check_count = 0
 
         for check_data in status.get("compliance_checks", {}).values():
-            risk_level = check_data.get(
-                "risk_level", "low"
-            ).lower()  # Ensure case-insensitivity
+            risk_level = check_data.get("risk_level", "low").lower()
             total_risk += risk_scores.get(risk_level, 1)
             check_count += 1
 
-        average_risk = total_risk / max(check_count, 1)  # Avoid division by zero
+        average_risk = total_risk / max(check_count, 1)
 
-        # Determine overall risk category
         if average_risk >= 3.5:
             overall_risk = "critical"
         elif average_risk >= 2.5:
@@ -372,13 +338,8 @@ def get_risk_assessment(entity_id):
 def get_compliance_types():
     """Get list of supported compliance check types"""
     try:
-        # Assuming ComplianceCheckType is an iterable enum
         compliance_types = [check_type.value for check_type in ComplianceCheckType]
-
-        return jsonify(
-            {"compliance_types": compliance_types, "count": len(compliance_types)}
-        )
-
+        return jsonify({"compliance_types": compliance_types, "count": len(compliance_types)})
     except Exception as e:
         logger.error(f"Error getting compliance types: {e}")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
@@ -386,19 +347,14 @@ def get_compliance_types():
 
 @compliance_app.errorhandler(404)
 def not_found(error):
-    # Ensure error handler returns a tuple of (response, status_code)
     return jsonify({"error": "Endpoint not found"}), 404
 
 
 @compliance_app.errorhandler(500)
 def internal_error(error):
-    # Ensure error handler returns a tuple of (response, status_code)
     return jsonify({"error": "Internal server error"}), 500
 
 
 if __name__ == "__main__":
-    # Initialize the compliance system
     init_compliance_system()
-
-    # Run the Flask app
-    compliance_app.run(host="0.0.0.0", port=5001, debug=True)
+    compliance_app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5001")), debug=False)

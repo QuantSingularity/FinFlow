@@ -51,6 +51,7 @@ export interface RefundInput {
   paymentId: string;
   amount?: number;
   reason?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface PaymentMethodInput {

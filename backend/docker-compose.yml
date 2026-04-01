@@ -1,0 +1,390 @@
+version: "3.9"
+
+# ============================================================
+# FinFlow Microservices - Docker Compose
+# ============================================================
+
+x-common-env: &common-env
+  NODE_ENV: ${NODE_ENV:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: ${DATABASE_URL:-postgresql://finflow:finflow_password@postgres:5432/finflow_db}
+  REDIS_HOST: ${REDIS_HOST:-redis}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  KAFKA_BROKERS: ${KAFKA_BROKERS:-kafka:9092}
+  KAFKA_CLIENT_ID: ${KAFKA_CLIENT_ID:-finflow-service}
+  KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-finflow-group}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+  JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 30s
+
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # Infrastructure
+  # ─────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    <<: *restart-policy
+    environment:
+      POSTGRES_USER: finflow
+      POSTGRES_PASSWORD: finflow_password
+      POSTGRES_DB: finflow_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U finflow -d finflow_db"]
+
+  redis:
+    image: redis:7-alpine
+    <<: *restart-policy
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    <<: *restart-policy
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    <<: *restart-policy
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "29092:29092"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          "kafka-broker-api-versions --bootstrap-server localhost:9092",
+        ]
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    <<: *restart-policy
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: finflow
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "9090:8080"
+    profiles:
+      - tools
+
+  # ─────────────────────────────────────────────────────────────
+  # Node/TypeScript Services
+  # ─────────────────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      PORT: 4000
+      SERVICE_NAME: auth-service
+      KAFKA_CLIENT_ID: auth-service
+      KAFKA_GROUP_ID: auth-service-group
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:4000/api/auth/oauth2/redirect/google}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      AUDIT_LOG_PATH: /app/logs/audit.log
+    volumes:
+      - auth_logs:/app/logs
+    ports:
+      - "4000:4000"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+
+  payments-service:
+    build:
+      context: ./payments-service
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      PORT: 4002
+      SERVICE_NAME: payments-service
+      KAFKA_CLIENT_ID: payments-service
+      KAFKA_GROUP_ID: payments-service-group
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?STRIPE_SECRET_KEY is required}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    ports:
+      - "4002:4002"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4002/health || exit 1"]
+
+  accounting-service:
+    build:
+      context: ./accounting-service
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      PORT: 4003
+      SERVICE_NAME: accounting-service
+      KAFKA_CLIENT_ID: accounting-service
+      KAFKA_GROUP_ID: accounting-service-group
+    ports:
+      - "4003:4003"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4003/health || exit 1"]
+
+  analytics-service:
+    build:
+      context: ./analytics-service
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      PORT: 4004
+      SERVICE_NAME: analytics-service
+      KAFKA_CLIENT_ID: analytics-service
+      KAFKA_GROUP_ID: analytics-service-group
+      TRANSACTION_HISTORY_MONTHS: ${TRANSACTION_HISTORY_MONTHS:-12}
+    ports:
+      - "4004:4004"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4004/health || exit 1"]
+
+  # ─────────────────────────────────────────────────────────────
+  # Python Services
+  # ─────────────────────────────────────────────────────────────
+
+  credit-engine:
+    build:
+      context: ./credit-engine
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://finflow:finflow_password@postgres:5432/finflow_db}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8000/health'')"',
+        ]
+
+  transaction-service-py:
+    build:
+      context: ./transaction-service
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 8001
+      DATABASE_URL: ${DATABASE_URL:-postgresql://finflow:finflow_password@postgres:5432/finflow_db}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    ports:
+      - "8001:8001"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8001/health'')"',
+        ]
+
+  ai-features-service:
+    build:
+      context: ./ai-features-service
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 8002
+      ENV: ${NODE_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://finflow:finflow_password@postgres:5432/finflow_db}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    ports:
+      - "8002:8002"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8002/health'')"',
+        ]
+
+  compliance-service:
+    build:
+      context: ./compliance-service
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8003
+      DATABASE_URL: ${DATABASE_URL:-postgresql://finflow:finflow_password@postgres:5432/finflow_db}
+    ports:
+      - "8003:8003"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8003/health'')"',
+        ]
+
+  tax-automation:
+    build:
+      context: ./tax_automation
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-policy
+    environment:
+      PORT: 5000
+    volumes:
+      - tax_db:/app/data
+    ports:
+      - "5000:5000"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:5000/health'')"',
+        ]
+
+  # ─────────────────────────────────────────────────────────────
+  # API Gateway (nginx reverse proxy)
+  # ─────────────────────────────────────────────────────────────
+
+  nginx:
+    image: nginx:1.25-alpine
+    <<: *restart-policy
+    depends_on:
+      - auth-service
+      - payments-service
+      - accounting-service
+      - analytics-service
+      - credit-engine
+      - transaction-service-py
+      - ai-features-service
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_logs:
+  auth_logs:
+  tax_db:
+
+networks:
+  default:
+    name: finflow-network
+    driver: bridge

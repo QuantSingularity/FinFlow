@@ -15,7 +15,11 @@ from pydantic import BaseModel, Field
 from redis import Redis
 from redis.exceptions import RedisError
 
-# --- MOCKED MODELS & VALIDATORS (Usually in models.py) ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("transaction-service")
 
 
 class TransactionStatus(str, Enum):
@@ -43,7 +47,7 @@ class TransactionRequest(BaseModel):
     transaction_id: str
     source_account_id: str
     destination_account_id: str
-    amount: float
+    amount: float = Field(..., gt=0)
     currency: str
     transaction_type: TransactionType
     reference: str
@@ -88,8 +92,8 @@ class TransactionBatchResponse(BaseModel):
 
 
 class TransactionQuery(BaseModel):
-    limit: int = 10
-    offset: int = 0
+    limit: int = Field(default=10, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
     status: Optional[TransactionStatus] = None
 
 
@@ -104,7 +108,6 @@ class ValidationResultMock:
 
 class TransactionValidator:
     def validate_transaction(self, transaction, context):
-        # Mock validation logic
         return ValidationResultMock()
 
 
@@ -116,39 +119,25 @@ class BatchTransactionValidator:
         return {t.transaction_id: ValidationResultMock() for t in transactions}
 
 
-# --- MAIN APPLICATION CODE ---
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger("transaction-service")
-
-# Initialize FastAPI app
 app = FastAPI(
     title="FinFlow Transaction Service",
     description="Comprehensive transaction processing and validation API",
     version="1.0.0",
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# OAuth2 scheme for JWT validation
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Initialize transaction validator
 transaction_validator = TransactionValidator()
 batch_validator = BatchTransactionValidator(transaction_validator)
 
-# Initialize Redis client for caching
 redis_client: Optional[Redis] = None
 try:
     redis_host = os.getenv("REDIS_HOST", "localhost")
@@ -165,48 +154,23 @@ except Exception as e:
     redis_client = None
 
 
-# JWT validation dependency
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    # In production, this would validate the JWT against Auth service
-    # For demo, we'll just log and accept any token
     logger.info(f"Received token: {token[:10]}...")
     return {"sub": "demo-user", "role": "USER"}
 
 
-# Request context extraction
 async def get_request_context(request: Request) -> Dict[str, Any]:
-    """
-    Extract context information from the request.
-
-    Args:
-        request: FastAPI Request object
-
-    Returns:
-        Dictionary with context information
-    """
-    context = {
+    return {
         "ip_address": request.client.host if request.client else None,
         "user_agent": request.headers.get("user-agent"),
         "request_id": str(uuid.uuid4()),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-    # In production, this would extract more information:
-    # - Device fingerprint from headers or cookies
-    # - Geolocation based on IP
-    # - User session information
 
-    return context
-
-
-# Cache middleware helpers
 async def get_cached_response(cache_key: str) -> Optional[Dict[str, Any]]:
-    """
-    Get cached response if available.
-    """
     if not redis_client:
         return None
-
     try:
         cached = redis_client.get(cache_key)
         if cached:
@@ -216,20 +180,14 @@ async def get_cached_response(cache_key: str) -> Optional[Dict[str, Any]]:
         logger.error(f"Redis error when getting cached response: {e}")
     except Exception as e:
         logger.error(f"Error when getting cached response: {e}")
-
     return None
 
 
 async def set_cached_response(
     cache_key: str, response_model: BaseModel, ttl_seconds: int = 300
 ) -> None:
-    """
-    Cache response for future requests.
-    Using Pydantic's model_dump_json ensures datetimes are serialized correctly.
-    """
     if not redis_client:
         return
-
     try:
         redis_client.setex(cache_key, ttl_seconds, response_model.model_dump_json())
         logger.info(f"Cached response with key: {cache_key}, TTL: {ttl_seconds}s")
@@ -239,28 +197,13 @@ async def set_cached_response(
         logger.error(f"Error when caching response: {e}")
 
 
-# Background processing function
 async def process_transaction_async(
     transaction: TransactionRequest,
     response: TransactionResponse,
     context: Dict[str, Any],
 ) -> None:
-    """
-    Process a transaction asynchronously.
-    """
-    # Simulate processing delay
     await asyncio.sleep(1)
-
-    # In production, this would:
-    # 1. Update account balances
-    # 2. Record in ledger
-    # 3. Send notifications
-    # 4. Update transaction status
-
     logger.info(f"Transaction {transaction.transaction_id} processed successfully")
-
-
-# --- ENDPOINTS ---
 
 
 @app.post(
@@ -274,25 +217,17 @@ async def create_transaction(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Create and validate a new transaction
-    """
-    # Extract request context
+    """Create and validate a new transaction"""
     context = await get_request_context(request)
     context["user_id"] = current_user["sub"]
 
-    # Log the request (audit logging)
     logger.info(
         f"Transaction request from user {current_user['sub']}: {transaction.transaction_id}"
     )
 
     try:
-        # Validate transaction
-        validation_result = transaction_validator.validate_transaction(
-            transaction, context
-        )
+        validation_result = transaction_validator.validate_transaction(transaction, context)
 
-        # Determine transaction status based on validation result
         if validation_result.is_valid:
             if validation_result.risk_level in [RiskLevel.HIGH, RiskLevel.CRITICAL]:
                 status_value = TransactionStatus.HELD
@@ -301,7 +236,6 @@ async def create_transaction(
         else:
             status_value = TransactionStatus.REJECTED
 
-        # Create transaction response
         response = TransactionResponse(
             transaction_id=transaction.transaction_id,
             source_account_id=transaction.source_account_id,
@@ -327,17 +261,12 @@ async def create_transaction(
             errors=validation_result.errors if not validation_result.is_valid else None,
         )
 
-        # Process transaction asynchronously if valid
         if validation_result.is_valid and status_value == TransactionStatus.PROCESSING:
-            background_tasks.add_task(
-                process_transaction_async, transaction, response, context
-            )
+            background_tasks.add_task(process_transaction_async, transaction, response, context)
 
-        # Log the response (audit logging)
         logger.info(
             f"Transaction response for {transaction.transaction_id}: "
-            f"status={status_value.value}, valid={validation_result.is_valid}, "
-            f"risk={validation_result.risk_level.value}"
+            f"status={status_value.value}, valid={validation_result.is_valid}"
         )
 
         return response
@@ -357,23 +286,18 @@ async def create_transaction_batch(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Create and validate a batch of transactions
-    """
-    # Extract request context
+    """Create and validate a batch of transactions"""
     context = await get_request_context(request)
     context["user_id"] = current_user["sub"]
 
-    # Log the request (audit logging)
     logger.info(
-        f"Transaction batch request from user {current_user['sub']}: {batch.batch_id}, {len(batch.transactions)} transactions"
+        f"Transaction batch request from user {current_user['sub']}: "
+        f"{batch.batch_id}, {len(batch.transactions)} transactions"
     )
 
     try:
-        # Validate transactions in batch
         validation_results = batch_validator.validate_batch(batch.transactions, context)
 
-        # Process each transaction and create responses
         transaction_responses = []
         successful_count = 0
         failed_count = 0
@@ -382,11 +306,9 @@ async def create_transaction_batch(
             validation_result = validation_results.get(transaction.transaction_id)
 
             if not validation_result:
-                # This should not happen, but handle it gracefully
                 failed_count += 1
                 continue
 
-            # Determine transaction status based on validation result
             if validation_result.is_valid:
                 if validation_result.risk_level in [RiskLevel.HIGH, RiskLevel.CRITICAL]:
                     status_value = TransactionStatus.HELD
@@ -397,7 +319,6 @@ async def create_transaction_batch(
                 status_value = TransactionStatus.REJECTED
                 failed_count += 1
 
-            # Create transaction response
             response = TransactionResponse(
                 transaction_id=transaction.transaction_id,
                 source_account_id=transaction.source_account_id,
@@ -420,23 +341,14 @@ async def create_transaction_batch(
                 risk_score=validation_result.risk_score,
                 risk_level=validation_result.risk_level,
                 metadata=transaction.metadata,
-                errors=(
-                    validation_result.errors if not validation_result.is_valid else None
-                ),
+                errors=(validation_result.errors if not validation_result.is_valid else None),
             )
 
             transaction_responses.append(response)
 
-            # Process valid transactions asynchronously
-            if (
-                validation_result.is_valid
-                and status_value == TransactionStatus.PROCESSING
-            ):
-                background_tasks.add_task(
-                    process_transaction_async, transaction, response, context
-                )
+            if validation_result.is_valid and status_value == TransactionStatus.PROCESSING:
+                background_tasks.add_task(process_transaction_async, transaction, response, context)
 
-        # Create batch response
         batch_response = TransactionBatchResponse(
             batch_id=batch.batch_id,
             processed_count=len(batch.transactions),
@@ -447,7 +359,6 @@ async def create_transaction_batch(
             completed_at=datetime.now(timezone.utc),
         )
 
-        # Log the response (audit logging)
         logger.info(
             f"Transaction batch response for {batch.batch_id}: "
             f"processed={len(batch.transactions)}, successful={successful_count}, failed={failed_count}"
@@ -469,25 +380,17 @@ async def get_transaction(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Get transaction details by ID
-    """
-    # Generate cache key
+    """Get transaction details by ID"""
     cache_key = f"transaction:{transaction_id}"
-
-    # Try to get from cache
     cached_response = await get_cached_response(cache_key)
     if cached_response:
         return cached_response
 
-    # Log the request (audit logging)
     logger.info(
         f"Transaction details request from user {current_user['sub']}: {transaction_id}"
     )
 
     try:
-        # In production, this would query a database
-        # For demo, we'll return a mock response
         response = TransactionResponse(
             transaction_id=transaction_id,
             source_account_id="account123",
@@ -513,9 +416,7 @@ async def get_transaction(
             errors=None,
         )
 
-        # Cache the response
         await set_cached_response(cache_key, response, ttl_seconds=300)
-
         return response
 
     except Exception as e:
@@ -528,37 +429,22 @@ async def get_transaction(
 
 @app.get("/transactions", response_model=List[TransactionResponse])
 async def query_transactions(
-    # --- FIX APPLIED HERE ---
-    # 1. Non-default argument (request) must come first.
     request: Request,
-    # 2. Default arguments (Depends, etc.) follow.
     query: TransactionQuery = Depends(),
     current_user: dict = Depends(get_current_user),
 ):
-    # The rest of your function logic remains the same,
-    # but now the Pylance/syntax error is resolved.
-
-    # ... (function body goes here)
-    pass  # Placeholder for function logic
-    """
-    Query transactions based on filters
-    """
-    # Generate cache key based on query parameters
+    """Query transactions based on filters"""
     cache_key = f"transactions:query:{hash(frozenset(query.model_dump().items()))}"
 
-    # Try to get from cache
     cached_response = await get_cached_response(cache_key)
     if cached_response:
         return cached_response
 
-    # Log the request (audit logging)
     logger.info(
         f"Transaction query request from user {current_user['sub']}: {query.model_dump()}"
     )
 
     try:
-        # In production, this would query a database with filters
-        # For demo, we'll return mock responses
         responses = [
             TransactionResponse(
                 transaction_id=f"tx-{i}",
@@ -577,10 +463,7 @@ async def query_transactions(
                     "is_valid": True,
                     "risk_score": 0.2,
                     "risk_level": "LOW",
-                    "validation_checks": {
-                        "basic_fields_valid": True,
-                        "amount_valid": True,
-                    },
+                    "validation_checks": {"basic_fields_valid": True, "amount_valid": True},
                 },
                 risk_score=0.2,
                 risk_level=RiskLevel.LOW,
@@ -590,14 +473,15 @@ async def query_transactions(
             for i in range(min(query.limit, 10))
         ]
 
-        # Cache the response (Note: manual JSON dump might be needed for Lists of models if not wrapped in a parent model)
-        # We manually dump the list here for Redis
         if redis_client:
-            redis_client.setex(
-                cache_key,
-                60,
-                json.dumps([r.model_dump(mode="json") for r in responses]),
-            )
+            try:
+                redis_client.setex(
+                    cache_key,
+                    60,
+                    json.dumps([r.model_dump(mode="json") for r in responses]),
+                )
+            except RedisError as e:
+                logger.error(f"Redis error caching query response: {e}")
 
         return responses
 
@@ -610,18 +494,15 @@ async def query_transactions(
 
 
 @app.get("/health", status_code=http_status.HTTP_200_OK)
-async def health_check() -> Dict[str, str]:
-    """
-    Health check endpoint for monitoring
-    """
-    # Check Redis connection if available
-    redis_status = "healthy" if redis_client else "unavailable"
-
-    try:
-        if redis_client:
+async def health_check() -> Dict[str, Any]:
+    """Health check endpoint"""
+    redis_status = "unavailable"
+    if redis_client:
+        try:
             redis_client.ping()
-    except Exception:
-        redis_status = "unhealthy"
+            redis_status = "healthy"
+        except Exception:
+            redis_status = "unhealthy"
 
     return {
         "status": "healthy",
@@ -633,5 +514,4 @@ async def health_check() -> Dict[str, str]:
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8001")))

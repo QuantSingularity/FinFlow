@@ -1,6 +1,6 @@
 import { PaymentStatus } from "@prisma/client";
 import paymentModel from "./models/payment.model";
-import { sendMessage } from "../config/kafka";
+import { sendMessage } from "../../../common/kafka";
 import {
   Payment,
   PaymentCreateInput,
@@ -9,11 +9,10 @@ import {
   RefundInput,
   ProcessorType,
 } from "./payment.types";
-import { logger } from "../utils/logger";
-import paymentProcessorFactory from "../factories/payment-processor.factory";
+import logger from "./utils/logger";
+import paymentProcessorFactory from "./factories/payment-processor.factory";
 
 class PaymentService {
-  // Find payment by ID
   async findById(id: string): Promise<Payment | null> {
     try {
       return await paymentModel.findById(id);
@@ -23,7 +22,6 @@ class PaymentService {
     }
   }
 
-  // Find payments by user ID
   async findByUserId(userId: string): Promise<Payment[]> {
     try {
       return await paymentModel.findByUserId(userId);
@@ -33,19 +31,34 @@ class PaymentService {
     }
   }
 
-  // Get available payment processors
+  async findByRequestId(requestId: string): Promise<Payment | null> {
+    try {
+      return await paymentModel.findByMetadataRequestId(requestId);
+    } catch (error) {
+      logger.error(`Error finding payment by request ID: ${error}`);
+      return null;
+    }
+  }
+
+  async findRefundByRequestId(requestId: string): Promise<Payment | null> {
+    try {
+      return await paymentModel.findRefundByMetadataRequestId(requestId);
+    } catch (error) {
+      logger.error(`Error finding refund by request ID: ${error}`);
+      return null;
+    }
+  }
+
   getAvailableProcessors(): string[] {
     return paymentProcessorFactory
       .getAllProcessors()
       .map((processor) => processor.getName());
   }
 
-  // Get client configurations for all processors
   getProcessorConfigs(): Record<string, Record<string, any>> {
     return paymentProcessorFactory.getAllClientConfigs();
   }
 
-  // Create a payment charge
   async createCharge(chargeInput: ChargeInput): Promise<Payment> {
     try {
       const {
@@ -54,21 +67,18 @@ class PaymentService {
         currency = "usd",
         source,
         metadata,
-        processorType = ProcessorType.STRIPE, // Default to Stripe if not specified
+        processorType = ProcessorType.STRIPE,
       } = chargeInput;
 
-      // Get the appropriate payment processor
       const processor = paymentProcessorFactory.getProcessor(processorType);
 
-      // Create a charge using the selected processor
       const processorCharge = await processor.createCharge(
-        Math.round(amount * 100), // Convert to cents for processors
+        Math.round(amount * 100),
         currency,
         source,
         metadata,
       );
 
-      // Create payment record in database
       const paymentData: PaymentCreateInput = {
         userId,
         amount,
@@ -84,15 +94,12 @@ class PaymentService {
       };
 
       const payment = await paymentModel.create(paymentData);
-
-      // Publish payment_completed event to Kafka
       await this.publishPaymentCompletedEvent(payment);
 
       return payment;
-    } catch (error) {
+    } catch (error: any) {
       logger.error(`Error creating payment charge: ${error}`);
 
-      // If charge failed, create a failed payment record
       const {
         userId,
         amount,
@@ -112,33 +119,27 @@ class PaymentService {
       };
 
       const payment = await paymentModel.create(paymentData);
-
-      // Publish payment_failed event to Kafka
       await this.publishPaymentFailedEvent(payment, error.message);
 
       return payment;
     }
   }
 
-  // Create a payment intent (for client-side processing)
   async createPaymentIntent(chargeInput: ChargeInput): Promise<any> {
     try {
       const {
-        userId,
         amount,
         currency = "usd",
         metadata,
-        processorType = ProcessorType.STRIPE, // Default to Stripe if not specified
+        processorType = ProcessorType.STRIPE,
       } = chargeInput;
 
-      // Get the appropriate payment processor
       const processor = paymentProcessorFactory.getProcessor(processorType);
 
-      // Create a payment intent using the selected processor
       const paymentIntent = await processor.createPaymentIntent(
-        Math.round(amount * 100), // Convert to cents for processors
+        Math.round(amount * 100),
         currency,
-        { ...metadata, userId }, // Include userId in metadata
+        { ...metadata, userId: chargeInput.userId },
       );
 
       return {
@@ -154,12 +155,10 @@ class PaymentService {
     }
   }
 
-  // Process a refund
   async createRefund(refundInput: RefundInput): Promise<Payment> {
     try {
       const { paymentId, amount, reason } = refundInput;
 
-      // Find the payment
       const payment = await this.findById(paymentId);
       if (!payment) {
         const error = new Error("Payment not found");
@@ -167,37 +166,29 @@ class PaymentService {
         throw error;
       }
 
-      // Check if payment can be refunded
       if (payment.status !== PaymentStatus.COMPLETED) {
         const error = new Error("Payment cannot be refunded");
         error.name = "ValidationError";
         throw error;
       }
 
-      // Get the processor used for this payment
       const processor = paymentProcessorFactory.getProcessor(
         payment.processorType,
       );
 
-      // Create refund using the appropriate processor
       const processorRefund = await processor.createRefund(
         payment.processorId!,
-        amount ? Math.round(amount * 100) : undefined, // Convert to cents for processors
+        amount ? Math.round(amount * 100) : undefined,
         reason,
       );
 
-      // Update payment record in database
       const paymentData: PaymentUpdateInput = {
         status: PaymentStatus.REFUNDED,
-        processorData: {
-          ...payment.processorData,
-          refund: processorRefund,
-        },
+        processorData: { ...payment.processorData, refund: processorRefund },
       };
 
       const updatedPayment = await paymentModel.update(paymentId, paymentData);
 
-      // Publish payment_refunded event to Kafka
       await sendMessage("payment_refunded", {
         id: updatedPayment.id,
         userId: updatedPayment.userId,
@@ -218,7 +209,6 @@ class PaymentService {
     }
   }
 
-  // Handle webhook event from payment processor
   async handleWebhookEvent(
     processorType: string,
     event: any,
@@ -226,16 +216,12 @@ class PaymentService {
     payload: string | Buffer,
   ): Promise<void> {
     try {
-      // Get the appropriate processor
       const processor = paymentProcessorFactory.getProcessor(processorType);
-
-      // Verify webhook signature
       const verifiedEvent = processor.verifyWebhookSignature(
         payload,
         signature,
       );
 
-      // Process the event based on processor type
       switch (processorType) {
         case ProcessorType.STRIPE:
           await this.handleStripeWebhookEvent(verifiedEvent);
@@ -255,444 +241,278 @@ class PaymentService {
     }
   }
 
-  // Handle Stripe webhook events
   private async handleStripeWebhookEvent(event: any): Promise<void> {
-    try {
-      switch (event.type) {
-        case "charge.succeeded":
-          await this.handleStripeChargeSucceeded(event.data.object);
-          break;
-        case "charge.failed":
-          await this.handleStripeChargeFailed(event.data.object);
-          break;
-        case "charge.refunded":
-          await this.handleStripeChargeRefunded(event.data.object);
-          break;
-        default:
-          logger.info(`Unhandled Stripe webhook event type: ${event.type}`);
-      }
-    } catch (error) {
-      logger.error(`Error handling Stripe webhook event: ${error}`);
-      throw error;
+    switch (event.type) {
+      case "charge.succeeded":
+        await this.handleStripeChargeSucceeded(event.data.object);
+        break;
+      case "charge.failed":
+        await this.handleStripeChargeFailed(event.data.object);
+        break;
+      case "charge.refunded":
+        await this.handleStripeChargeRefunded(event.data.object);
+        break;
+      default:
+        logger.info(`Unhandled Stripe webhook event type: ${event.type}`);
     }
   }
 
-  // Handle PayPal webhook events
   private async handlePayPalWebhookEvent(event: any): Promise<void> {
-    try {
-      switch (event.event_type) {
-        case "PAYMENT.CAPTURE.COMPLETED":
-          await this.handlePayPalPaymentCompleted(event.resource);
-          break;
-        case "PAYMENT.CAPTURE.DENIED":
-          await this.handlePayPalPaymentDenied(event.resource);
-          break;
-        case "PAYMENT.CAPTURE.REFUNDED":
-          await this.handlePayPalPaymentRefunded(event.resource);
-          break;
-        default:
-          logger.info(
-            `Unhandled PayPal webhook event type: ${event.event_type}`,
-          );
-      }
-    } catch (error) {
-      logger.error(`Error handling PayPal webhook event: ${error}`);
-      throw error;
+    switch (event.event_type) {
+      case "PAYMENT.CAPTURE.COMPLETED":
+        await this.handlePayPalPaymentCompleted(event.resource);
+        break;
+      case "PAYMENT.CAPTURE.DENIED":
+        await this.handlePayPalPaymentDenied(event.resource);
+        break;
+      case "PAYMENT.CAPTURE.REFUNDED":
+        await this.handlePayPalPaymentRefunded(event.resource);
+        break;
+      default:
+        logger.info(`Unhandled PayPal webhook event type: ${event.event_type}`);
     }
   }
 
-  // Handle Square webhook events
   private async handleSquareWebhookEvent(event: any): Promise<void> {
-    try {
-      switch (event.type) {
-        case "payment.created":
-          await this.handleSquarePaymentCreated(event.data.object.payment);
-          break;
-        case "payment.updated":
-          await this.handleSquarePaymentUpdated(event.data.object.payment);
-          break;
-        case "refund.created":
-          await this.handleSquareRefundCreated(event.data.object.refund);
-          break;
-        default:
-          logger.info(`Unhandled Square webhook event type: ${event.type}`);
-      }
-    } catch (error) {
-      logger.error(`Error handling Square webhook event: ${error}`);
-      throw error;
+    switch (event.type) {
+      case "payment.created":
+        await this.handleSquarePaymentCreated(event.data.object.payment);
+        break;
+      case "payment.updated":
+        await this.handleSquarePaymentUpdated(event.data.object.payment);
+        break;
+      case "refund.created":
+        await this.handleSquareRefundCreated(event.data.object.refund);
+        break;
+      default:
+        logger.info(`Unhandled Square webhook event type: ${event.type}`);
     }
   }
 
-  // Handle Stripe charge.succeeded event
   private async handleStripeChargeSucceeded(charge: any): Promise<void> {
-    try {
-      // Check if payment already exists
-      const existingPayment = await paymentModel.findByProcessorId(charge.id);
-      if (existingPayment) {
-        // Payment already processed
-        return;
-      }
+    const existingPayment = await paymentModel.findByProcessorId(charge.id);
+    if (existingPayment) return;
 
-      // Extract user ID from metadata
-      const userId = charge.metadata?.userId;
-      if (!userId) {
-        logger.error("User ID not found in charge metadata");
-        return;
-      }
-
-      // Create payment record
-      const paymentData: PaymentCreateInput = {
-        userId,
-        amount: charge.amount / 100, // Convert from cents
-        currency: charge.currency,
-        status: PaymentStatus.COMPLETED,
-        processorId: charge.id,
-        processorType: ProcessorType.STRIPE,
-        processorData: charge,
-        metadata: charge.metadata,
-      };
-
-      const payment = await paymentModel.create(paymentData);
-
-      // Publish payment_completed event to Kafka
-      await this.publishPaymentCompletedEvent(payment);
-    } catch (error) {
-      logger.error(`Error handling Stripe charge.succeeded event: ${error}`);
-      throw error;
+    const userId = charge.metadata?.userId;
+    if (!userId) {
+      logger.error("User ID not found in charge metadata");
+      return;
     }
+
+    const payment = await paymentModel.create({
+      userId,
+      amount: charge.amount / 100,
+      currency: charge.currency,
+      status: PaymentStatus.COMPLETED,
+      processorId: charge.id,
+      processorType: ProcessorType.STRIPE,
+      processorData: charge,
+      metadata: charge.metadata,
+    });
+    await this.publishPaymentCompletedEvent(payment);
   }
 
-  // Handle Stripe charge.failed event
   private async handleStripeChargeFailed(charge: any): Promise<void> {
-    try {
-      // Check if payment already exists
-      const existingPayment = await paymentModel.findByProcessorId(charge.id);
-      if (existingPayment) {
-        // Payment already processed
-        return;
-      }
+    const existingPayment = await paymentModel.findByProcessorId(charge.id);
+    if (existingPayment) return;
 
-      // Extract user ID from metadata
-      const userId = charge.metadata?.userId;
-      if (!userId) {
-        logger.error("User ID not found in charge metadata");
-        return;
-      }
-
-      // Create payment record
-      const paymentData: PaymentCreateInput = {
-        userId,
-        amount: charge.amount / 100, // Convert from cents
-        currency: charge.currency,
-        status: PaymentStatus.FAILED,
-        processorId: charge.id,
-        processorType: ProcessorType.STRIPE,
-        processorData: charge,
-        metadata: charge.metadata,
-      };
-
-      const payment = await paymentModel.create(paymentData);
-
-      // Publish payment_failed event to Kafka
-      await this.publishPaymentFailedEvent(payment, charge.failure_message);
-    } catch (error) {
-      logger.error(`Error handling Stripe charge.failed event: ${error}`);
-      throw error;
+    const userId = charge.metadata?.userId;
+    if (!userId) {
+      logger.error("User ID not found in charge metadata");
+      return;
     }
+
+    const payment = await paymentModel.create({
+      userId,
+      amount: charge.amount / 100,
+      currency: charge.currency,
+      status: PaymentStatus.FAILED,
+      processorId: charge.id,
+      processorType: ProcessorType.STRIPE,
+      processorData: charge,
+      metadata: charge.metadata,
+    });
+    await this.publishPaymentFailedEvent(payment, charge.failure_message);
   }
 
-  // Handle Stripe charge.refunded event
   private async handleStripeChargeRefunded(charge: any): Promise<void> {
-    try {
-      // Find the payment by processor ID
-      const payment = await paymentModel.findByProcessorId(charge.id);
-      if (!payment) {
-        logger.error(`Payment not found for Stripe charge ID: ${charge.id}`);
-        return;
-      }
-
-      // Update payment record
-      const paymentData: PaymentUpdateInput = {
-        status: PaymentStatus.REFUNDED,
-        processorData: charge,
-      };
-
-      const updatedPayment = await paymentModel.update(payment.id, paymentData);
-
-      // Publish payment_refunded event to Kafka
-      await sendMessage("payment_refunded", {
-        id: updatedPayment.id,
-        userId: updatedPayment.userId,
-        amount: updatedPayment.amount,
-        currency: updatedPayment.currency,
-        status: updatedPayment.status,
-        processorId: updatedPayment.processorId,
-        processorType: updatedPayment.processorType,
-        createdAt: updatedPayment.createdAt,
-        refundAmount: charge.amount_refunded / 100, // Convert from cents
-      });
-    } catch (error) {
-      logger.error(`Error handling Stripe charge.refunded event: ${error}`);
-      throw error;
+    const payment = await paymentModel.findByProcessorId(charge.id);
+    if (!payment) {
+      logger.error(`Payment not found for Stripe charge ID: ${charge.id}`);
+      return;
     }
+
+    const updatedPayment = await paymentModel.update(payment.id, {
+      status: PaymentStatus.REFUNDED,
+      processorData: charge,
+    });
+
+    await sendMessage("payment_refunded", {
+      id: updatedPayment.id,
+      userId: updatedPayment.userId,
+      amount: updatedPayment.amount,
+      currency: updatedPayment.currency,
+      status: updatedPayment.status,
+      processorId: updatedPayment.processorId,
+      processorType: updatedPayment.processorType,
+      createdAt: updatedPayment.createdAt,
+      refundAmount: charge.amount_refunded / 100,
+    });
   }
 
-  // Handle PayPal payment completed event
   private async handlePayPalPaymentCompleted(resource: any): Promise<void> {
-    try {
-      // Check if payment already exists
-      const existingPayment = await paymentModel.findByProcessorId(resource.id);
-      if (existingPayment) {
-        // Payment already processed
-        return;
-      }
+    const existingPayment = await paymentModel.findByProcessorId(resource.id);
+    if (existingPayment) return;
 
-      // Extract user ID from custom ID (stored during payment creation)
-      const customId = resource.custom_id || "";
-      const userId = customId.split("_")[0]; // Assuming format: "userId_otherInfo"
-
-      if (!userId) {
-        logger.error("User ID not found in PayPal payment custom ID");
-        return;
-      }
-
-      // Create payment record
-      const paymentData: PaymentCreateInput = {
-        userId,
-        amount: parseFloat(resource.amount.value), // PayPal uses decimal amounts
-        currency: resource.amount.currency_code.toLowerCase(),
-        status: PaymentStatus.COMPLETED,
-        processorId: resource.id,
-        processorType: ProcessorType.PAYPAL,
-        processorData: resource,
-        metadata: { customId },
-      };
-
-      const payment = await paymentModel.create(paymentData);
-
-      // Publish payment_completed event to Kafka
-      await this.publishPaymentCompletedEvent(payment);
-    } catch (error) {
-      logger.error(`Error handling PayPal payment completed event: ${error}`);
-      throw error;
+    const customId = resource.custom_id || "";
+    const userId = customId.split("_")[0];
+    if (!userId) {
+      logger.error("User ID not found in PayPal payment custom ID");
+      return;
     }
+
+    const payment = await paymentModel.create({
+      userId,
+      amount: parseFloat(resource.amount.value),
+      currency: resource.amount.currency_code.toLowerCase(),
+      status: PaymentStatus.COMPLETED,
+      processorId: resource.id,
+      processorType: ProcessorType.PAYPAL,
+      processorData: resource,
+      metadata: { customId },
+    });
+    await this.publishPaymentCompletedEvent(payment);
   }
 
-  // Handle PayPal payment denied event
   private async handlePayPalPaymentDenied(resource: any): Promise<void> {
-    try {
-      // Check if payment already exists
-      const existingPayment = await paymentModel.findByProcessorId(resource.id);
-      if (existingPayment) {
-        // Payment already processed
-        return;
-      }
+    const existingPayment = await paymentModel.findByProcessorId(resource.id);
+    if (existingPayment) return;
 
-      // Extract user ID from custom ID (stored during payment creation)
-      const customId = resource.custom_id || "";
-      const userId = customId.split("_")[0]; // Assuming format: "userId_otherInfo"
-
-      if (!userId) {
-        logger.error("User ID not found in PayPal payment custom ID");
-        return;
-      }
-
-      // Create payment record
-      const paymentData: PaymentCreateInput = {
-        userId,
-        amount: parseFloat(resource.amount.value), // PayPal uses decimal amounts
-        currency: resource.amount.currency_code.toLowerCase(),
-        status: PaymentStatus.FAILED,
-        processorId: resource.id,
-        processorType: ProcessorType.PAYPAL,
-        processorData: resource,
-        metadata: { customId },
-      };
-
-      const payment = await paymentModel.create(paymentData);
-
-      // Publish payment_failed event to Kafka
-      await this.publishPaymentFailedEvent(
-        payment,
-        resource.status_details?.reason || "Payment denied",
-      );
-    } catch (error) {
-      logger.error(`Error handling PayPal payment denied event: ${error}`);
-      throw error;
+    const customId = resource.custom_id || "";
+    const userId = customId.split("_")[0];
+    if (!userId) {
+      logger.error("User ID not found in PayPal payment custom ID");
+      return;
     }
+
+    const payment = await paymentModel.create({
+      userId,
+      amount: parseFloat(resource.amount.value),
+      currency: resource.amount.currency_code.toLowerCase(),
+      status: PaymentStatus.FAILED,
+      processorId: resource.id,
+      processorType: ProcessorType.PAYPAL,
+      processorData: resource,
+      metadata: { customId },
+    });
+    await this.publishPaymentFailedEvent(
+      payment,
+      resource.status_details?.reason || "Payment denied",
+    );
   }
 
-  // Handle PayPal payment refunded event
   private async handlePayPalPaymentRefunded(resource: any): Promise<void> {
-    try {
-      // Find the payment by processor ID
-      const payment = await paymentModel.findByProcessorId(resource.id);
-      if (!payment) {
-        logger.error(`Payment not found for PayPal payment ID: ${resource.id}`);
-        return;
-      }
-
-      // Update payment record
-      const paymentData: PaymentUpdateInput = {
-        status: PaymentStatus.REFUNDED,
-        processorData: resource,
-      };
-
-      const updatedPayment = await paymentModel.update(payment.id, paymentData);
-
-      // Publish payment_refunded event to Kafka
-      await sendMessage("payment_refunded", {
-        id: updatedPayment.id,
-        userId: updatedPayment.userId,
-        amount: updatedPayment.amount,
-        currency: updatedPayment.currency,
-        status: updatedPayment.status,
-        processorId: updatedPayment.processorId,
-        processorType: updatedPayment.processorType,
-        createdAt: updatedPayment.createdAt,
-        refundAmount: parseFloat(resource.amount.value), // PayPal uses decimal amounts
-      });
-    } catch (error) {
-      logger.error(`Error handling PayPal payment refunded event: ${error}`);
-      throw error;
+    const payment = await paymentModel.findByProcessorId(resource.id);
+    if (!payment) {
+      logger.error(`Payment not found for PayPal payment ID: ${resource.id}`);
+      return;
     }
+
+    const updatedPayment = await paymentModel.update(payment.id, {
+      status: PaymentStatus.REFUNDED,
+      processorData: resource,
+    });
+
+    await sendMessage("payment_refunded", {
+      id: updatedPayment.id,
+      userId: updatedPayment.userId,
+      amount: updatedPayment.amount,
+      refundAmount: parseFloat(resource.amount.value),
+    });
   }
 
-  // Handle Square payment created event
   private async handleSquarePaymentCreated(payment: any): Promise<void> {
-    try {
-      // Check if payment already exists
-      const existingPayment = await paymentModel.findByProcessorId(payment.id);
-      if (existingPayment) {
-        // Payment already processed
-        return;
-      }
+    const existingPayment = await paymentModel.findByProcessorId(payment.id);
+    if (existingPayment) return;
 
-      // Extract user ID from reference ID (stored during payment creation)
-      const referenceId = payment.reference_id || "";
-      const userId = referenceId.split("_")[0]; // Assuming format: "userId_otherInfo"
+    const referenceId = payment.reference_id || "";
+    const userId = referenceId.split("_")[0];
+    if (!userId) {
+      logger.error("User ID not found in Square payment reference ID");
+      return;
+    }
 
-      if (!userId) {
-        logger.error("User ID not found in Square payment reference ID");
-        return;
-      }
+    const status =
+      payment.status === "COMPLETED"
+        ? PaymentStatus.COMPLETED
+        : PaymentStatus.PENDING;
+    const paymentRecord = await paymentModel.create({
+      userId,
+      amount: payment.amount_money.amount / 100,
+      currency: payment.amount_money.currency.toLowerCase(),
+      status,
+      processorId: payment.id,
+      processorType: ProcessorType.SQUARE,
+      processorData: payment,
+      metadata: { referenceId },
+    });
 
-      // Create payment record
-      const paymentData: PaymentCreateInput = {
-        userId,
-        amount: payment.amount_money.amount / 100, // Convert from cents
-        currency: payment.amount_money.currency.toLowerCase(),
-        status:
-          payment.status === "COMPLETED"
-            ? PaymentStatus.COMPLETED
-            : PaymentStatus.PENDING,
-        processorId: payment.id,
-        processorType: ProcessorType.SQUARE,
-        processorData: payment,
-        metadata: { referenceId },
-      };
-
-      const paymentRecord = await paymentModel.create(paymentData);
-
-      // Publish payment_completed event to Kafka if payment is completed
-      if (payment.status === "COMPLETED") {
-        await this.publishPaymentCompletedEvent(paymentRecord);
-      }
-    } catch (error) {
-      logger.error(`Error handling Square payment created event: ${error}`);
-      throw error;
+    if (payment.status === "COMPLETED") {
+      await this.publishPaymentCompletedEvent(paymentRecord);
     }
   }
 
-  // Handle Square payment updated event
   private async handleSquarePaymentUpdated(payment: any): Promise<void> {
-    try {
-      // Find the payment by processor ID
-      const existingPayment = await paymentModel.findByProcessorId(payment.id);
-      if (!existingPayment) {
-        logger.error(`Payment not found for Square payment ID: ${payment.id}`);
-        return;
-      }
+    const existingPayment = await paymentModel.findByProcessorId(payment.id);
+    if (!existingPayment) {
+      logger.error(`Payment not found for Square payment ID: ${payment.id}`);
+      return;
+    }
 
-      // Determine the new status
-      let status = existingPayment.status;
-      if (payment.status === "COMPLETED") {
-        status = PaymentStatus.COMPLETED;
-      } else if (payment.status === "FAILED") {
-        status = PaymentStatus.FAILED;
-      }
+    let status = existingPayment.status;
+    if (payment.status === "COMPLETED") status = PaymentStatus.COMPLETED;
+    else if (payment.status === "FAILED") status = PaymentStatus.FAILED;
 
-      // Update payment record
-      const paymentData: PaymentUpdateInput = {
-        status,
-        processorData: payment,
-      };
+    const updatedPayment = await paymentModel.update(existingPayment.id, {
+      status,
+      processorData: payment,
+    });
 
-      const updatedPayment = await paymentModel.update(
-        existingPayment.id,
-        paymentData,
-      );
-
-      // Publish appropriate event to Kafka based on status
-      if (
-        status === PaymentStatus.COMPLETED &&
-        existingPayment.status !== PaymentStatus.COMPLETED
-      ) {
-        await this.publishPaymentCompletedEvent(updatedPayment);
-      } else if (
-        status === PaymentStatus.FAILED &&
-        existingPayment.status !== PaymentStatus.FAILED
-      ) {
-        await this.publishPaymentFailedEvent(updatedPayment, "Payment failed");
-      }
-    } catch (error) {
-      logger.error(`Error handling Square payment updated event: ${error}`);
-      throw error;
+    if (
+      status === PaymentStatus.COMPLETED &&
+      existingPayment.status !== PaymentStatus.COMPLETED
+    ) {
+      await this.publishPaymentCompletedEvent(updatedPayment);
+    } else if (
+      status === PaymentStatus.FAILED &&
+      existingPayment.status !== PaymentStatus.FAILED
+    ) {
+      await this.publishPaymentFailedEvent(updatedPayment, "Payment failed");
     }
   }
 
-  // Handle Square refund created event
   private async handleSquareRefundCreated(refund: any): Promise<void> {
-    try {
-      // Find the payment by processor ID
-      const payment = await paymentModel.findByProcessorId(refund.payment_id);
-      if (!payment) {
-        logger.error(
-          `Payment not found for Square payment ID: ${refund.payment_id}`,
-        );
-        return;
-      }
-
-      // Update payment record
-      const paymentData: PaymentUpdateInput = {
-        status: PaymentStatus.REFUNDED,
-        processorData: {
-          ...payment.processorData,
-          refund,
-        },
-      };
-
-      const updatedPayment = await paymentModel.update(payment.id, paymentData);
-
-      // Publish payment_refunded event to Kafka
-      await sendMessage("payment_refunded", {
-        id: updatedPayment.id,
-        userId: updatedPayment.userId,
-        amount: updatedPayment.amount,
-        currency: updatedPayment.currency,
-        status: updatedPayment.status,
-        processorId: updatedPayment.processorId,
-        processorType: updatedPayment.processorType,
-        createdAt: updatedPayment.createdAt,
-        refundAmount: refund.amount_money.amount / 100, // Convert from cents
-      });
-    } catch (error) {
-      logger.error(`Error handling Square refund created event: ${error}`);
-      throw error;
+    const payment = await paymentModel.findByProcessorId(refund.payment_id);
+    if (!payment) {
+      logger.error(
+        `Payment not found for Square payment ID: ${refund.payment_id}`,
+      );
+      return;
     }
+
+    const updatedPayment = await paymentModel.update(payment.id, {
+      status: PaymentStatus.REFUNDED,
+      processorData: { ...payment.processorData, refund },
+    });
+
+    await sendMessage("payment_refunded", {
+      id: updatedPayment.id,
+      userId: updatedPayment.userId,
+      amount: updatedPayment.amount,
+      refundAmount: refund.amount_money.amount / 100,
+    });
   }
 
-  // Publish payment_completed event to Kafka
   private async publishPaymentCompletedEvent(payment: Payment): Promise<void> {
     try {
       await sendMessage("payment_completed", {
@@ -707,11 +527,9 @@ class PaymentService {
       });
     } catch (error) {
       logger.error(`Error publishing payment_completed event: ${error}`);
-      // Don't throw error, just log it
     }
   }
 
-  // Publish payment_failed event to Kafka
   private async publishPaymentFailedEvent(
     payment: Payment,
     reason: string,
@@ -728,7 +546,6 @@ class PaymentService {
       });
     } catch (error) {
       logger.error(`Error publishing payment_failed event: ${error}`);
-      // Don't throw error, just log it
     }
   }
 }

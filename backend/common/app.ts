@@ -4,50 +4,35 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import passport from "passport";
-import routes from "./routes";
-import { initializeDatabase } from "./config/database";
-import { initializeKafka } from "./config/kafka";
-import { initializePassport } from "./config/passport";
+import { initializeDatabase } from "./database";
+import { initializeKafka } from "./kafka";
+import { initializePassport } from "./passport";
 import errorMiddleware from "./error.middleware";
-import loggerMiddleware from "./middlewares/logger.middleware";
 
-// Load environment variables
 dotenv.config();
 
-// Create Express application
 const app = express();
 
-// Middleware
-app.use(helmet()); // Security headers
-app.use(cors()); // CORS support
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
-app.use(loggerMiddleware); // Request logging
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Initialize Passport
 initializePassport();
 app.use(passport.initialize());
 
-// Routes
-app.use("/api", routes);
-
-// Health check endpoint
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok", service: "auth-service" });
+  res
+    .status(200)
+    .json({ status: "ok", service: process.env.SERVICE_NAME || "service" });
 });
 
-// Error handling middleware
 app.use(errorMiddleware);
 
-// Initialize services
 const initializeApp = async () => {
   try {
-    // Connect to database
     await initializeDatabase();
-
-    // Connect to Kafka
     await initializeKafka();
-
     logger.info("All services initialized successfully");
   } catch (error) {
     logger.error("Failed to initialize services:", error);
@@ -55,7 +40,6 @@ const initializeApp = async () => {
   }
 };
 
-// Call initialization function
 initializeApp();
 
 export default app;

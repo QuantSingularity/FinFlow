@@ -1,0 +1,25 @@
+-- FinFlow Database Initialization
+-- Creates separate schemas per service for data isolation
+
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS payments;
+CREATE SCHEMA IF NOT EXISTS accounting;
+CREATE SCHEMA IF NOT EXISTS analytics;
+
+-- Extension for UUID generation
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Grant schema usage to finflow user
+GRANT USAGE ON SCHEMA auth TO finflow;
+GRANT USAGE ON SCHEMA payments TO finflow;
+GRANT USAGE ON SCHEMA accounting TO finflow;
+GRANT USAGE ON SCHEMA analytics TO finflow;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA auth TO finflow;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA payments TO finflow;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA accounting TO finflow;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA analytics TO finflow;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA auth TO finflow;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA payments TO finflow;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA accounting TO finflow;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA analytics TO finflow;
