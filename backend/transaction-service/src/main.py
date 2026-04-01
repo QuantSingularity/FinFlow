@@ -226,7 +226,9 @@ async def create_transaction(
     )
 
     try:
-        validation_result = transaction_validator.validate_transaction(transaction, context)
+        validation_result = transaction_validator.validate_transaction(
+            transaction, context
+        )
 
         if validation_result.is_valid:
             if validation_result.risk_level in [RiskLevel.HIGH, RiskLevel.CRITICAL]:
@@ -262,7 +264,9 @@ async def create_transaction(
         )
 
         if validation_result.is_valid and status_value == TransactionStatus.PROCESSING:
-            background_tasks.add_task(process_transaction_async, transaction, response, context)
+            background_tasks.add_task(
+                process_transaction_async, transaction, response, context
+            )
 
         logger.info(
             f"Transaction response for {transaction.transaction_id}: "
@@ -341,13 +345,20 @@ async def create_transaction_batch(
                 risk_score=validation_result.risk_score,
                 risk_level=validation_result.risk_level,
                 metadata=transaction.metadata,
-                errors=(validation_result.errors if not validation_result.is_valid else None),
+                errors=(
+                    validation_result.errors if not validation_result.is_valid else None
+                ),
             )
 
             transaction_responses.append(response)
 
-            if validation_result.is_valid and status_value == TransactionStatus.PROCESSING:
-                background_tasks.add_task(process_transaction_async, transaction, response, context)
+            if (
+                validation_result.is_valid
+                and status_value == TransactionStatus.PROCESSING
+            ):
+                background_tasks.add_task(
+                    process_transaction_async, transaction, response, context
+                )
 
         batch_response = TransactionBatchResponse(
             batch_id=batch.batch_id,
@@ -463,7 +474,10 @@ async def query_transactions(
                     "is_valid": True,
                     "risk_score": 0.2,
                     "risk_level": "LOW",
-                    "validation_checks": {"basic_fields_valid": True, "amount_valid": True},
+                    "validation_checks": {
+                        "basic_fields_valid": True,
+                        "amount_valid": True,
+                    },
                 },
                 risk_score=0.2,
                 risk_level=RiskLevel.LOW,
@@ -514,4 +528,5 @@ async def health_check() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8001")))

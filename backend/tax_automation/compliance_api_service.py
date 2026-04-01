@@ -2,15 +2,10 @@ import logging
 import os
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-
-from international_compliance import (
-    ComplianceCheckType,
-    InternationalComplianceManager,
-)
+from international_compliance import ComplianceCheckType, InternationalComplianceManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -101,7 +96,9 @@ def get_entity_profile(entity_id):
             "expected_transaction_volume": (
                 float(profile.expected_transaction_volume)
                 if profile.expected_transaction_volume
-                and isinstance(profile.expected_transaction_volume, (Decimal, int, float))
+                and isinstance(
+                    profile.expected_transaction_volume, (Decimal, int, float)
+                )
                 else None
             ),
             "risk_factors": profile.risk_factors,
@@ -184,8 +181,12 @@ def monitor_transaction():
             return jsonify({"error": "Request body is required"}), 400
 
         required_fields = [
-            "transaction_id", "entity_id", "amount", "transaction_type",
-            "origin_country", "destination_country",
+            "transaction_id",
+            "entity_id",
+            "amount",
+            "transaction_type",
+            "origin_country",
+            "destination_country",
         ]
         for field in required_fields:
             if field not in data:
@@ -212,7 +213,9 @@ def monitor_transaction():
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 
-@compliance_app.route("/api/compliance/check/comprehensive/<entity_id>", methods=["POST"])
+@compliance_app.route(
+    "/api/compliance/check/comprehensive/<entity_id>", methods=["POST"]
+)
 def perform_comprehensive_check(entity_id):
     """Perform comprehensive compliance check"""
     try:
@@ -229,7 +232,9 @@ def perform_comprehensive_check(entity_id):
                 "risk_level": result.risk_level.value,
                 "details": result.details,
                 "performed_at": result.performed_at.isoformat(),
-                "expires_at": (result.expires_at.isoformat() if result.expires_at else None),
+                "expires_at": (
+                    result.expires_at.isoformat() if result.expires_at else None
+                ),
                 "notes": result.notes,
             }
 
@@ -255,7 +260,9 @@ def get_compliance_status(entity_id):
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 
-@compliance_app.route("/api/compliance/check/data-residency/<entity_id>", methods=["POST"])
+@compliance_app.route(
+    "/api/compliance/check/data-residency/<entity_id>", methods=["POST"]
+)
 def check_data_residency(entity_id):
     """Check data residency compliance"""
     try:
@@ -265,8 +272,10 @@ def check_data_residency(entity_id):
         data = request.get_json() or {}
         data_location = data.get("data_location", "US")
 
-        result = compliance_manager.data_residency_service.check_data_residency_compliance(
-            entity_id, data_location
+        result = (
+            compliance_manager.data_residency_service.check_data_residency_compliance(
+                entity_id, data_location
+            )
         )
 
         response = {
@@ -339,7 +348,9 @@ def get_compliance_types():
     """Get list of supported compliance check types"""
     try:
         compliance_types = [check_type.value for check_type in ComplianceCheckType]
-        return jsonify({"compliance_types": compliance_types, "count": len(compliance_types)})
+        return jsonify(
+            {"compliance_types": compliance_types, "count": len(compliance_types)}
+        )
     except Exception as e:
         logger.error(f"Error getting compliance types: {e}")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
