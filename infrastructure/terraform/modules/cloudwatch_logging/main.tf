@@ -1,6 +1,6 @@
 resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
   name              = "cloudtrail-logs-${var.environment}"
-  retention_in_days = 365 # Retain logs for 1 year
+  retention_in_days = 365
 
   tags = merge(
     {
@@ -11,23 +11,48 @@ resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
   )
 }
 
-resource "aws_cloudtrail" "finflow_trail" {
-  name                          = "finflow-cloudtrail-${var.environment}"
-  s3_bucket_name                = var.s3_bucket_name
-  s3_key_prefix                 = "cloudtrail/"
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_log_file_validation    = true
-  cloud_watch_logs_role_arn     = var.cloudwatch_logs_role_arn
-  cloud_watch_logs_group_arn    = aws_cloudwatch_log_group.cloudtrail_log_group.arn
+resource "aws_iam_role" "cloudwatch_logs_role" {
+  name = "${var.environment}-cloudtrail-cloudwatch-logs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+      }
+    ]
+  })
 
   tags = merge(
     {
-      Name        = "finflow-cloudtrail-${var.environment}"
+      Name        = "${var.environment}-cloudtrail-cloudwatch-logs-role"
       Environment = var.environment
     },
     var.tags
   )
+}
+
+resource "aws_iam_role_policy" "cloudwatch_logs_policy" {
+  name = "${var.environment}-cloudtrail-cloudwatch-logs-policy"
+  role = aws_iam_role.cloudwatch_logs_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
+      }
+    ]
+  })
 }
 
 resource "aws_s3_bucket" "cloudtrail_bucket" {
@@ -35,7 +60,7 @@ resource "aws_s3_bucket" "cloudtrail_bucket" {
 
   tags = merge(
     {
-      Name        = "${var.s3_bucket_name}"
+      Name        = var.s3_bucket_name
       Environment = var.environment
     },
     var.tags
@@ -44,6 +69,9 @@ resource "aws_s3_bucket" "cloudtrail_bucket" {
 
 resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
   bucket = aws_s3_bucket.cloudtrail_bucket.id
+
+  depends_on = [aws_s3_bucket.cloudtrail_bucket]
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -91,48 +119,33 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_bucket
   }
 }
 
-resource "aws_iam_role" "cloudwatch_logs_role" {
-  name = "${var.environment}-cloudtrail-cloudwatch-logs-role"
+resource "aws_s3_bucket_public_access_block" "cloudtrail_bucket_public_access" {
+  bucket                  = aws_s3_bucket.cloudtrail_bucket.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-      }
-    ]
-  })
+resource "aws_cloudtrail" "finflow_trail" {
+  name                          = "finflow-cloudtrail-${var.environment}"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.id
+  s3_key_prefix                 = "cloudtrail"
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
+  cloud_watch_logs_role_arn     = aws_iam_role.cloudwatch_logs_role.arn
+  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
+
+  depends_on = [
+    aws_s3_bucket_policy.cloudtrail_bucket_policy
+  ]
 
   tags = merge(
     {
-      Name        = "${var.environment}-cloudtrail-cloudwatch-logs-role"
+      Name        = "finflow-cloudtrail-${var.environment}"
       Environment = var.environment
     },
     var.tags
   )
 }
-
-resource "aws_iam_role_policy" "cloudwatch_logs_policy" {
-  name = "${var.environment}-cloudtrail-cloudwatch-logs-policy"
-  role = aws_iam_role.cloudwatch_logs_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
-      }
-    ]
-  })
-}
-
-

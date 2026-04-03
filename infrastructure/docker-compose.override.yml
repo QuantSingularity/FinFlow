@@ -1,0 +1,97 @@
+# Development overrides — automatically merged by docker compose
+# Use: docker compose up
+# Adds: port exposure, hot-reload mounts, debug env vars, relaxed healthchecks
+
+version: "3.9"
+
+services:
+  auth-db:
+    ports:
+      - "5433:5432"
+
+  payments-db:
+    ports:
+      - "5434:5432"
+
+  accounting-db:
+    ports:
+      - "5435:5432"
+
+  analytics-db:
+    ports:
+      - "5436:5432"
+
+  kafka:
+    environment:
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  auth-service:
+    build:
+      target: build
+    volumes:
+      - ../services/auth-service/src:/app/src:ro
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    ports:
+      - "3001:3001"
+
+  payments-service:
+    build:
+      target: build
+    volumes:
+      - ../services/payments-service/src:/app/src:ro
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    ports:
+      - "3002:3002"
+
+  accounting-service:
+    build:
+      target: build
+    volumes:
+      - ../services/accounting-service/src:/app/src:ro
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    ports:
+      - "3003:3003"
+
+  analytics-service:
+    build:
+      target: build
+    volumes:
+      - ../services/analytics-service/src:/app/src:ro
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    ports:
+      - "3004:3004"
+
+  credit-engine:
+    build:
+      target: build
+    volumes:
+      - ../services/credit-engine:/app:ro
+    environment:
+      LOG_LEVEL: debug
+    ports:
+      - "8001:8001"
+
+  api-gateway:
+    build:
+      target: build
+    volumes:
+      - ../services/api-gateway/src:/app/src:ro
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+
+  frontend:
+    build:
+      target: build
+    volumes:
+      - ../services/frontend/src:/app/src:ro
+    environment:
+      NODE_ENV: development

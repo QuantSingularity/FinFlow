@@ -1,3 +1,4 @@
+# ── VPC ──────────────────────────────────────────────────────────────────────
 module "vpc" {
   source = "./modules/vpc"
 
@@ -7,51 +8,54 @@ module "vpc" {
   database_subnet_cidrs = var.database_subnet_cidrs
   availability_zones    = var.availability_zones
   environment           = var.environment
+  bastion_allowed_cidrs = var.bastion_allowed_cidrs
 
-  # Tags
   tags = merge(var.tags, {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   })
 }
 
+# ── IAM (base roles – no OIDC dependency) ────────────────────────────────────
 module "iam" {
   source                  = "./modules/iam"
   environment             = var.environment
   tags                    = var.tags
   aws_region              = var.aws_region
   secrets_manager_prefix  = var.secrets_manager_prefix
-  cluster_oidc_issuer_url = module.eks.cluster_oidc_issuer_url
 }
 
+# ── EKS ──────────────────────────────────────────────────────────────────────
 module "eks" {
   source = "./modules/eks"
 
-  cluster_name            = var.cluster_name
-  cluster_version         = var.cluster_version
-  vpc_id                  = module.vpc.vpc_id
-  private_subnet_ids      = module.vpc.private_subnet_ids
-  node_groups             = var.node_groups
-  environment             = var.environment
-  eks_cluster_role_arn    = module.iam.eks_cluster_role_arn
-  eks_node_group_role_arn = module.iam.eks_node_group_role_arn
+  cluster_name              = var.cluster_name
+  cluster_version           = var.cluster_version
+  vpc_id                    = module.vpc.vpc_id
+  private_subnet_ids        = module.vpc.private_subnets
+  node_groups               = var.node_groups
+  environment               = var.environment
+  eks_cluster_role_arn      = module.iam.eks_cluster_role_arn
+  eks_node_group_role_arn   = module.iam.eks_node_group_role_arn
+  cluster_security_group_id = module.vpc.eks_nodes_security_group_id
 
-  # Tags
   tags = var.tags
 }
 
+
+# ── RDS ──────────────────────────────────────────────────────────────────────
 module "rds" {
   source = "./modules/rds"
 
-  vpc_id                = module.vpc.vpc_id
-  subnet_ids            = module.vpc.database_subnets
-  environment           = var.environment
-  db_instance_class     = var.db_instance_class
-  db_allocated_storage  = var.db_allocated_storage
-  db_engine_version     = var.db_engine_version
-  kms_key_id            = aws_kms_key.finflow_key.id
-  rds_security_group_id = module.vpc.rds_security_group_id
+  vpc_id                  = module.vpc.vpc_id
+  subnet_ids              = module.vpc.database_subnets
+  environment             = var.environment
+  db_instance_class       = var.db_instance_class
+  db_allocated_storage    = var.db_allocated_storage
+  db_engine_version       = var.db_engine_version
+  kms_key_id              = aws_kms_key.finflow_key.id
+  rds_security_group_id   = module.vpc.rds_security_group_id
+  rds_monitoring_role_arn = module.iam.rds_enhanced_monitoring_role_arn
 
-  # Database instances
   databases = {
     auth = {
       name = "auth"
@@ -71,16 +75,15 @@ module "rds" {
     }
   }
 
-  # Tags
   tags = var.tags
 }
 
+# ── ECR ──────────────────────────────────────────────────────────────────────
 module "ecr" {
   source = "./modules/ecr"
 
   environment = var.environment
 
-  # Repository names
   repositories = [
     "frontend",
     "api-gateway",
@@ -91,21 +94,19 @@ module "ecr" {
     "credit-engine"
   ]
 
-  # Image scanning and lifecycle policies
   enable_scan_on_push   = true
   image_retention_count = 10
 
-  # Tags
   tags = var.tags
 }
 
+# ── Route53 ──────────────────────────────────────────────────────────────────
 module "route53" {
   source = "./modules/route53"
 
   domain_name = var.domain_name
   environment = var.environment
 
-  # Record sets
   record_sets = {
     main = {
       name = ""
@@ -127,10 +128,10 @@ module "route53" {
     }
   }
 
-  # Tags
   tags = var.tags
 }
 
+# ── Bastion ───────────────────────────────────────────────────────────────────
 module "bastion" {
   source = "./modules/bastion"
   count  = var.enable_bastion ? 1 : 0
@@ -139,21 +140,20 @@ module "bastion" {
   subnet_id    = module.vpc.public_subnets[0]
   environment  = var.environment
   ssh_key_name = "finflow-${var.environment}"
-  allowed_cidr = ["0.0.0.0/0"] # Restrict to known IPs in production
+  allowed_cidr = var.bastion_allowed_cidrs
 
-  # Tags
   tags = var.tags
 }
 
-# CloudWatch Logging Module
+# ── CloudWatch / CloudTrail ──────────────────────────────────────────────────
 module "cloudwatch_logging" {
   source         = "./modules/cloudwatch_logging"
   environment    = var.environment
-  s3_bucket_name = "finflow-cloudtrail-logs-${var.environment}"
+  s3_bucket_name = "${var.cloudtrail_s3_bucket_name}-${var.environment}"
   tags           = var.tags
 }
 
-# Create namespaces in Kubernetes
+# ── Kubernetes Namespaces ────────────────────────────────────────────────────
 resource "kubernetes_namespace" "finflow" {
   metadata {
     name = "finflow-${var.environment}"
@@ -180,50 +180,19 @@ resource "kubernetes_namespace" "monitoring" {
   depends_on = [module.eks]
 }
 
-# Install Prometheus and Grafana using Helm
+# ── Prometheus / Grafana via Helm ────────────────────────────────────────────
 resource "helm_release" "prometheus" {
   name       = "prometheus"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
   namespace  = kubernetes_namespace.monitoring.metadata[0].name
-  version    = "45.7.1"
+  version    = "55.5.0"
 
   values = [
     file("${path.module}/helm-values/prometheus-values.yaml")
   ]
 
-  depends_on = [kubernetes_namespace.monitoring]
+  timeout = 600
+
+  depends_on = [kubernetes_namespace.monitoring, module.eks]
 }
-
-# Output important information
-output "vpc_id" {
-  description = "The ID of the VPC"
-  value       = module.vpc.vpc_id
-}
-
-output "eks_cluster_name" {
-  description = "The name of the EKS cluster"
-  value       = module.eks.cluster_name
-}
-
-output "eks_cluster_endpoint" {
-  description = "The endpoint for the EKS cluster"
-  value       = module.eks.cluster_endpoint
-}
-
-output "ecr_repository_urls" {
-  description = "The URLs of the ECR repositories"
-  value       = module.ecr.repository_urls
-}
-
-output "bastion_public_ip" {
-  description = "The public IP of the bastion host"
-  value       = var.enable_bastion ? module.bastion[0].public_ip : null
-}
-
-output "kubeconfig_command" {
-  description = "Command to configure kubectl"
-  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"
-}
-
-

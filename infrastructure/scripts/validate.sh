@@ -1,187 +1,120 @@
 #!/bin/bash
 # Infrastructure validation script for FinFlow
-# This script validates the infrastructure setup
+set -euo pipefail
 
-set -e
-
-# Set colors for output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Function to print status
+INFRA_DIR="${INFRA_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ERRORS=0
+
 print_status() {
-  if [ $1 -eq 0 ]; then
-    echo -e "${GREEN}✓ $2${NC}"
+  if [ "$1" -eq 0 ]; then
+    echo -e "  ${GREEN}✓ $2${NC}"
   else
-    echo -e "${RED}✗ $2${NC}"
-    if [ -n "$3" ]; then
-      echo -e "  ${YELLOW}$3${NC}"
-    fi
+    echo -e "  ${RED}✗ $2${NC}"
+    [ -n "${3:-}" ] && echo -e "    ${YELLOW}→ $3${NC}"
+    ERRORS=$((ERRORS + 1))
   fi
 }
 
+section() { echo -e "\n${BLUE}▶ $1${NC}"; }
+
 echo "=== FinFlow Infrastructure Validation ==="
-echo "Starting validation at $(date)"
-echo
+echo "Base dir: $INFRA_DIR"
+echo "Started : $(date)"
 
-# Check directory structure
-echo "Checking directory structure..."
-DIRS=(
-  "docker"
-  "kubernetes"
-  "ansible"
-  "terraform"
-  "scripts"
-)
-
-for dir in "${DIRS[@]}"; do
-  if [ -d "/FinFlow/infrastructure/$dir" ]; then
-    print_status 0 "Directory $dir exists"
-  else
-    print_status 1 "Directory $dir does not exist" "Create the directory: mkdir -p /FinFlow/infrastructure/$dir"
-  fi
+section "Directory structure"
+for dir in docker kubernetes ansible terraform scripts monitoring; do
+  [ -d "$INFRA_DIR/$dir" ]
+  print_status $? "Directory: $dir"
 done
 
-# Check Docker files
-echo -e "\nChecking Docker files..."
-DOCKER_DIRS=(
-  "frontend"
-  "api-gateway"
-  "auth-service"
-  "payments-service"
-  "accounting-service"
-  "analytics-service"
-  "credit-engine"
-)
-
-for dir in "${DOCKER_DIRS[@]}"; do
-  if [ -f "/FinFlow/infrastructure/docker/$dir/Dockerfile" ]; then
-    print_status 0 "Dockerfile for $dir exists"
-  else
-    print_status 1 "Dockerfile for $dir does not exist" "Create the Dockerfile: touch /FinFlow/infrastructure/docker/$dir/Dockerfile"
-  fi
+section "Dockerfiles"
+for svc in frontend api-gateway auth-service payments-service accounting-service analytics-service credit-engine; do
+  [ -f "$INFRA_DIR/docker/$svc/Dockerfile" ]
+  print_status $? "Dockerfile: $svc"
 done
 
-# Check Kubernetes manifests
-echo -e "\nChecking Kubernetes manifests..."
-K8S_DIRS=(
-  "frontend"
-  "api-gateway"
-  "auth-service"
-  "payments-service"
-  "accounting-service"
-  "analytics-service"
-  "credit-engine"
-  "databases"
-  "monitoring"
-)
-
-for dir in "${K8S_DIRS[@]}"; do
-  if [ -d "/FinFlow/infrastructure/kubernetes/$dir" ]; then
-    print_status 0 "Kubernetes manifests for $dir exist"
-  else
-    print_status 1 "Kubernetes manifests for $dir do not exist" "Create the directory: mkdir -p /FinFlow/infrastructure/kubernetes/$dir"
-  fi
+section "Kubernetes manifests"
+for svc in frontend api-gateway auth-service payments-service accounting-service analytics-service credit-engine databases; do
+  [ -d "$INFRA_DIR/kubernetes/$svc" ]
+  print_status $? "K8s dir: $svc"
 done
 
-# Check Ansible playbooks and roles
-echo -e "\nChecking Ansible playbooks and roles..."
-ANSIBLE_ROLES=(
-  "common"
-  "docker"
-  "kubernetes"
-  "monitoring"
-  "deployment"
-)
+section "Kubernetes ingress files"
+for f in "kubernetes/frontend/ingress.yaml" "kubernetes/api-gateway/ingress.yaml"; do
+  [ -f "$INFRA_DIR/$f" ]
+  print_status $? "File: $f"
+done
 
-if [ -f "/FinFlow/infrastructure/ansible/site.yml" ]; then
-  print_status 0 "Ansible site.yml exists"
+section "Kafka & ZooKeeper manifests"
+grep -q "zookeeper" "$INFRA_DIR/kubernetes/databases/kafka-statefulset.yaml" 2>/dev/null
+print_status $? "ZooKeeper StatefulSet present in kafka-statefulset.yaml"
+grep -q "zookeeper" "$INFRA_DIR/kubernetes/databases/kafka-service.yaml" 2>/dev/null
+print_status $? "ZooKeeper Service present in kafka-service.yaml"
+
+section "Port consistency"
+GW_PORT=$(grep -A2 'name: http' "$INFRA_DIR/kubernetes/api-gateway/service.yaml" 2>/dev/null | grep 'port:' | head -1 | awk '{print $2}')
+CE_PORT=$(grep -A2 'name: http' "$INFRA_DIR/kubernetes/credit-engine/service.yaml" 2>/dev/null | grep 'port:' | head -1 | awk '{print $2}')
+[ "$GW_PORT" != "$CE_PORT" ]
+print_status $? "api-gateway ($GW_PORT) and credit-engine ($CE_PORT) ports are different"
+
+section "Ansible playbooks and roles"
+[ -f "$INFRA_DIR/ansible/site.yml" ]
+print_status $? "ansible/site.yml"
+for role in common docker kubernetes monitoring deployment; do
+  [ -d "$INFRA_DIR/ansible/roles/$role" ]
+  print_status $? "Ansible role: $role"
+done
+
+section "Terraform modules"
+[ -f "$INFRA_DIR/terraform/main.tf" ]
+print_status $? "terraform/main.tf"
+[ -f "$INFRA_DIR/terraform/variables.tf" ]
+print_status $? "terraform/variables.tf"
+[ -f "$INFRA_DIR/terraform/outputs.tf" ]
+print_status $? "terraform/outputs.tf"
+[ ! -f "$INFRA_DIR/terraform/outputs.tf.duplicate_backup" ]
+print_status $? "No duplicate outputs backup file"
+for mod in vpc eks rds ecr route53 bastion iam cloudwatch_logging secrets_manager; do
+  [ -d "$INFRA_DIR/terraform/modules/$mod" ]
+  print_status $? "Terraform module: $mod"
+done
+
+section "Helm values"
+for f in prometheus-values.yaml fluentd-values.yaml elasticsearch-values.yaml grafana-values.yaml; do
+  [ -f "$INFRA_DIR/terraform/helm-values/$f" ]
+  print_status $? "Helm values: $f"
+done
+
+section "Docker Compose files"
+[ -f "$INFRA_DIR/docker-compose.yml" ]
+print_status $? "docker-compose.yml (root)"
+[ -f "$INFRA_DIR/docker-compose.override.yml" ]
+print_status $? "docker-compose.override.yml (dev overrides)"
+
+section "Scripts"
+for script in setup.sh deploy.sh backup.sh monitoring-setup.sh validate.sh; do
+  [ -f "$INFRA_DIR/scripts/$script" ]
+  print_status $? "Script exists: $script"
+  [ -x "$INFRA_DIR/scripts/$script" ]
+  print_status $? "Script executable: $script"
+done
+
+section "No hardcoded absolute paths in scripts"
+BAD_PATHS=$(grep -rl '/FinFlow/\|/finflow-infra/' "$INFRA_DIR/scripts/" 2>/dev/null | tr '\n' ' ')
+[ -z "$BAD_PATHS" ]
+print_status $? "No hardcoded /FinFlow/ or /finflow-infra/ paths in scripts"
+
+echo ""
+echo "Completed: $(date)"
+if [ "$ERRORS" -eq 0 ]; then
+  echo -e "${GREEN}All checks passed!${NC}"
 else
-  print_status 1 "Ansible site.yml does not exist" "Create the file: touch /FinFlow/infrastructure/ansible/site.yml"
+  echo -e "${RED}$ERRORS check(s) failed.${NC}"
+  exit 1
 fi
-
-for role in "${ANSIBLE_ROLES[@]}"; do
-  if [ -d "/FinFlow/infrastructure/ansible/roles/$role" ]; then
-    print_status 0 "Ansible role $role exists"
-  else
-    print_status 1 "Ansible role $role does not exist" "Create the directory: mkdir -p /FinFlow/infrastructure/ansible/roles/$role"
-  fi
-done
-
-# Check Terraform modules
-echo -e "\nChecking Terraform modules..."
-TF_MODULES=(
-  "vpc"
-  "eks"
-  "rds"
-  "ecr"
-  "route53"
-  "bastion"
-)
-
-if [ -f "/FinFlow/infrastructure/terraform/main.tf" ]; then
-  print_status 0 "Terraform main.tf exists"
-else
-  print_status 1 "Terraform main.tf does not exist" "Create the file: touch /FinFlow/infrastructure/terraform/main.tf"
-fi
-
-if [ -f "/FinFlow/infrastructure/terraform/variables.tf" ]; then
-  print_status 0 "Terraform variables.tf exists"
-else
-  print_status 1 "Terraform variables.tf does not exist" "Create the file: touch /FinFlow/infrastructure/terraform/variables.tf"
-fi
-
-for module in "${TF_MODULES[@]}"; do
-  if [ -d "/FinFlow/infrastructure/terraform/modules/$module" ]; then
-    print_status 0 "Terraform module $module exists"
-  else
-    print_status 1 "Terraform module $module does not exist" "Create the directory: mkdir -p /FinFlow/infrastructure/terraform/modules/$module"
-  fi
-done
-
-# Check Helm values
-echo -e "\nChecking Helm values..."
-HELM_VALUES=(
-  "prometheus-values.yaml"
-  "fluentd-values.yaml"
-  "elasticsearch-values.yaml"
-  "grafana-values.yaml"
-)
-
-for value in "${HELM_VALUES[@]}"; do
-  if [ -f "/FinFlow/infrastructure/terraform/helm-values/$value" ]; then
-    print_status 0 "Helm values file $value exists"
-  else
-    print_status 1 "Helm values file $value does not exist" "Create the file: touch /FinFlow/infrastructure/terraform/helm-values/$value"
-  fi
-done
-
-# Check documentation
-echo -e "\nChecking documentation..."
-if [ -f "/FinFlow/infrastructure/documentation.md" ]; then
-  print_status 0 "Documentation file exists"
-else
-  print_status 1 "Documentation file does not exist" "Create the file: touch /FinFlow/infrastructure/documentation.md"
-fi
-
-# Check automation scripts
-echo -e "\nChecking automation scripts..."
-SCRIPTS=(
-  "setup.sh"
-  "deploy.sh"
-  "backup.sh"
-  "monitoring-setup.sh"
-)
-
-for script in "${SCRIPTS[@]}"; do
-  if [ -f "/FinFlow/infrastructure/scripts/$script" ]; then
-    print_status 0 "Script $script exists"
-  else
-    print_status 1 "Script $script does not exist" "Create the script: touch /FinFlow/infrastructure/scripts/$script"
-  fi
-done
-
-echo -e "\nValidation completed at $(date)"
-echo "=== End of Validation ==="

@@ -1,7 +1,6 @@
 locals {
   cluster_name = var.cluster_name
 
-  # Common tags
   common_tags = merge(
     {
       Environment = var.environment
@@ -12,7 +11,6 @@ locals {
   )
 }
 
-# EKS Cluster
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
   role_arn = var.eks_cluster_role_arn
@@ -20,8 +18,9 @@ resource "aws_eks_cluster" "main" {
 
   vpc_config {
     subnet_ids              = var.private_subnet_ids
-    endpoint_private_access = true  # Enforce private access for API server
-    endpoint_public_access  = false # Disable public access for API server
+    endpoint_private_access = true
+    endpoint_public_access  = false
+    security_group_ids      = [var.cluster_security_group_id]
   }
 
   enabled_cluster_log_types = [
@@ -33,9 +32,10 @@ resource "aws_eks_cluster" "main" {
   ]
 
   tags = local.common_tags
+
+  depends_on = [var.eks_cluster_role_arn]
 }
 
-# EKS Node Groups
 resource "aws_eks_node_group" "main" {
   for_each = var.node_groups
 
@@ -60,10 +60,17 @@ resource "aws_eks_node_group" "main" {
     each.value.labels
   )
 
+  update_config {
+    max_unavailable = 1
+  }
+
   tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
 }
 
-# Create OIDC provider for the cluster
 data "tls_certificate" "eks" {
   url = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
@@ -76,7 +83,6 @@ resource "aws_iam_openid_connect_provider" "eks" {
   tags = local.common_tags
 }
 
-# Create IAM role for AWS Load Balancer Controller
 resource "aws_iam_role" "lb_controller" {
   name = "${var.cluster_name}-lb-controller-role"
 
@@ -92,6 +98,7 @@ resource "aws_iam_role" "lb_controller" {
         Condition = {
           StringEquals = {
             "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" : "system:serviceaccount:kube-system:aws-load-balancer-controller"
+            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" : "sts.amazonaws.com"
           }
         }
       }
@@ -101,7 +108,6 @@ resource "aws_iam_role" "lb_controller" {
   tags = local.common_tags
 }
 
-# Create IAM policy for AWS Load Balancer Controller
 resource "aws_iam_policy" "lb_controller" {
   name        = "${var.cluster_name}-lb-controller-policy"
   description = "IAM policy for AWS Load Balancer Controller"
@@ -109,18 +115,17 @@ resource "aws_iam_policy" "lb_controller" {
   policy = file("${path.module}/policies/lb-controller-policy.json")
 }
 
-# Attach policy to role
 resource "aws_iam_role_policy_attachment" "lb_controller" {
   policy_arn = aws_iam_policy.lb_controller.arn
   role       = aws_iam_role.lb_controller.name
 }
 
-# Install AWS Load Balancer Controller using Helm
 resource "helm_release" "lb_controller" {
   name       = "aws-load-balancer-controller"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"
   namespace  = "kube-system"
+  version    = "1.6.2"
 
   set {
     name  = "clusterName"
@@ -148,5 +153,3 @@ resource "helm_release" "lb_controller" {
     aws_iam_role_policy_attachment.lb_controller
   ]
 }
-
-

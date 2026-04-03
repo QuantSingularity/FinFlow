@@ -12,7 +12,6 @@ resource "aws_vpc" "main" {
   )
 }
 
-# Public subnets
 resource "aws_subnet" "public" {
   count = length(var.public_subnet_cidrs)
 
@@ -23,7 +22,7 @@ resource "aws_subnet" "public" {
 
   tags = merge(
     {
-      Name                     = "${var.environment}-public-subnet-${count.index}"
+      Name                     = "${var.environment}-public-subnet-${count.index + 1}"
       Environment              = var.environment
       "kubernetes.io/role/elb" = "1"
     },
@@ -31,7 +30,6 @@ resource "aws_subnet" "public" {
   )
 }
 
-# Private subnets
 resource "aws_subnet" "private" {
   count = length(var.private_subnet_cidrs)
 
@@ -42,7 +40,7 @@ resource "aws_subnet" "private" {
 
   tags = merge(
     {
-      Name                              = "${var.environment}-private-subnet-${count.index}"
+      Name                              = "${var.environment}-private-subnet-${count.index + 1}"
       Environment                       = var.environment
       "kubernetes.io/role/internal-elb" = "1"
     },
@@ -50,7 +48,6 @@ resource "aws_subnet" "private" {
   )
 }
 
-# Database subnets
 resource "aws_subnet" "database" {
   count = length(var.database_subnet_cidrs)
 
@@ -61,14 +58,13 @@ resource "aws_subnet" "database" {
 
   tags = merge(
     {
-      Name        = "${var.environment}-database-subnet-${count.index}"
+      Name        = "${var.environment}-database-subnet-${count.index + 1}"
       Environment = var.environment
     },
     var.tags
   )
 }
 
-# Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
@@ -81,22 +77,22 @@ resource "aws_internet_gateway" "main" {
   )
 }
 
-# Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
   count = length(var.public_subnet_cidrs)
 
   domain = "vpc"
 
+  depends_on = [aws_internet_gateway.main]
+
   tags = merge(
     {
-      Name        = "${var.environment}-nat-eip-${count.index}"
+      Name        = "${var.environment}-nat-eip-${count.index + 1}"
       Environment = var.environment
     },
     var.tags
   )
 }
 
-# NAT Gateways
 resource "aws_nat_gateway" "main" {
   count = length(var.public_subnet_cidrs)
 
@@ -105,7 +101,7 @@ resource "aws_nat_gateway" "main" {
 
   tags = merge(
     {
-      Name        = "${var.environment}-nat-gw-${count.index}"
+      Name        = "${var.environment}-nat-gw-${count.index + 1}"
       Environment = var.environment
     },
     var.tags
@@ -114,7 +110,6 @@ resource "aws_nat_gateway" "main" {
   depends_on = [aws_internet_gateway.main]
 }
 
-# Route tables for public subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -127,14 +122,12 @@ resource "aws_route_table" "public" {
   )
 }
 
-# Route to Internet Gateway for public subnets
 resource "aws_route" "public_internet_gateway" {
   route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.main.id
 }
 
-# Route table associations for public subnets
 resource "aws_route_table_association" "public" {
   count = length(var.public_subnet_cidrs)
 
@@ -142,7 +135,6 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Route tables for private subnets
 resource "aws_route_table" "private" {
   count = length(var.private_subnet_cidrs)
 
@@ -150,14 +142,13 @@ resource "aws_route_table" "private" {
 
   tags = merge(
     {
-      Name        = "${var.environment}-private-rt-${count.index}"
+      Name        = "${var.environment}-private-rt-${count.index + 1}"
       Environment = var.environment
     },
     var.tags
   )
 }
 
-# Routes to NAT Gateway for private subnets
 resource "aws_route" "private_nat_gateway" {
   count = length(var.private_subnet_cidrs)
 
@@ -166,7 +157,6 @@ resource "aws_route" "private_nat_gateway" {
   nat_gateway_id         = aws_nat_gateway.main[count.index].id
 }
 
-# Route table associations for private subnets
 resource "aws_route_table_association" "private" {
   count = length(var.private_subnet_cidrs)
 
@@ -174,7 +164,6 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
-# Route tables for database subnets
 resource "aws_route_table" "database" {
   count = length(var.database_subnet_cidrs)
 
@@ -182,14 +171,13 @@ resource "aws_route_table" "database" {
 
   tags = merge(
     {
-      Name        = "${var.environment}-database-rt-${count.index}"
+      Name        = "${var.environment}-database-rt-${count.index + 1}"
       Environment = var.environment
     },
     var.tags
   )
 }
 
-# Routes to NAT Gateway for database subnets
 resource "aws_route" "database_nat_gateway" {
   count = length(var.database_subnet_cidrs)
 
@@ -198,7 +186,6 @@ resource "aws_route" "database_nat_gateway" {
   nat_gateway_id         = aws_nat_gateway.main[count.index].id
 }
 
-# Route table associations for database subnets
 resource "aws_route_table_association" "database" {
   count = length(var.database_subnet_cidrs)
 
@@ -206,7 +193,6 @@ resource "aws_route_table_association" "database" {
   route_table_id = aws_route_table.database[count.index].id
 }
 
-# Security Group for Load Balancer
 resource "aws_security_group" "alb" {
   name        = "${var.environment}-alb-sg"
   description = "Allow HTTP/HTTPS traffic to ALB"
@@ -217,6 +203,7 @@ resource "aws_security_group" "alb" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP"
   }
 
   ingress {
@@ -224,6 +211,7 @@ resource "aws_security_group" "alb" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTPS"
   }
 
   egress {
@@ -231,6 +219,7 @@ resource "aws_security_group" "alb" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
   }
 
   tags = merge(
@@ -240,9 +229,46 @@ resource "aws_security_group" "alb" {
     },
     var.tags
   )
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# Security Group for EKS Nodes
+resource "aws_security_group" "bastion" {
+  name        = "${var.environment}-bastion-sg"
+  description = "Allow SSH access to Bastion host"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.bastion_allowed_cidrs
+    description = "SSH access - restrict to known IPs in production"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = merge(
+    {
+      Name        = "${var.environment}-bastion-sg"
+      Environment = var.environment
+    },
+    var.tags
+  )
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 resource "aws_security_group" "eks_nodes" {
   name        = "${var.environment}-eks-nodes-sg"
   description = "Allow traffic to EKS nodes"
@@ -253,6 +279,15 @@ resource "aws_security_group" "eks_nodes" {
     to_port         = 0
     protocol        = "-1"
     security_groups = [aws_security_group.alb.id, aws_security_group.bastion.id]
+    description     = "Allow traffic from ALB and Bastion"
+  }
+
+  ingress {
+    from_port = 0
+    to_port   = 0
+    protocol  = "-1"
+    self      = true
+    description = "Allow node-to-node communication"
   }
 
   egress {
@@ -260,6 +295,7 @@ resource "aws_security_group" "eks_nodes" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
   }
 
   tags = merge(
@@ -269,19 +305,23 @@ resource "aws_security_group" "eks_nodes" {
     },
     var.tags
   )
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# Security Group for RDS Databases
 resource "aws_security_group" "rds" {
   name        = "${var.environment}-rds-sg"
   description = "Allow traffic to RDS instances"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 5432 # PostgreSQL default port
+    from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.eks_nodes.id]
+    description     = "PostgreSQL access from EKS nodes"
   }
 
   egress {
@@ -289,6 +329,7 @@ resource "aws_security_group" "rds" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
   }
 
   tags = merge(
@@ -298,38 +339,12 @@ resource "aws_security_group" "rds" {
     },
     var.tags
   )
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# Security Group for Bastion Host
-resource "aws_security_group" "bastion" {
-  name        = "${var.environment}-bastion-sg"
-  description = "Allow SSH access to Bastion host"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict to known IPs in production
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    {
-      Name        = "${var.environment}-bastion-sg"
-      Environment = var.environment
-    },
-    var.tags
-  )
-}
-
-# Network ACL for Public Subnets
 resource "aws_network_acl" "public" {
   vpc_id     = aws_vpc.main.id
   subnet_ids = aws_subnet.public[*].id
@@ -356,7 +371,16 @@ resource "aws_network_acl" "public" {
     rule_no    = 120
     protocol   = "tcp"
     from_port  = 1024
-    to_port    = 65535 # Ephemeral ports
+    to_port    = 65535
+    cidr_block = "0.0.0.0/0"
+    action     = "allow"
+  }
+
+  ingress {
+    rule_no    = 130
+    protocol   = "tcp"
+    from_port  = 22
+    to_port    = 22
     cidr_block = "0.0.0.0/0"
     action     = "allow"
   }
@@ -383,7 +407,7 @@ resource "aws_network_acl" "public" {
     rule_no    = 120
     protocol   = "tcp"
     from_port  = 1024
-    to_port    = 65535 # Ephemeral ports
+    to_port    = 65535
     cidr_block = "0.0.0.0/0"
     action     = "allow"
   }
@@ -397,7 +421,6 @@ resource "aws_network_acl" "public" {
   )
 }
 
-# Network ACL for Private Subnets
 resource "aws_network_acl" "private" {
   vpc_id     = aws_vpc.main.id
   subnet_ids = aws_subnet.private[*].id
@@ -406,7 +429,7 @@ resource "aws_network_acl" "private" {
     rule_no    = 100
     protocol   = "tcp"
     from_port  = 1024
-    to_port    = 65535 # Ephemeral ports
+    to_port    = 65535
     cidr_block = aws_vpc.main.cidr_block
     action     = "allow"
   }
@@ -433,7 +456,7 @@ resource "aws_network_acl" "private" {
     rule_no    = 100
     protocol   = "tcp"
     from_port  = 1024
-    to_port    = 65535 # Ephemeral ports
+    to_port    = 65535
     cidr_block = "0.0.0.0/0"
     action     = "allow"
   }
@@ -465,7 +488,6 @@ resource "aws_network_acl" "private" {
   )
 }
 
-# Network ACL for Database Subnets
 resource "aws_network_acl" "database" {
   vpc_id     = aws_vpc.main.id
   subnet_ids = aws_subnet.database[*].id
@@ -473,7 +495,7 @@ resource "aws_network_acl" "database" {
   ingress {
     rule_no    = 100
     protocol   = "tcp"
-    from_port  = 5432 # PostgreSQL
+    from_port  = 5432
     to_port    = 5432
     cidr_block = aws_vpc.main.cidr_block
     action     = "allow"
@@ -483,7 +505,7 @@ resource "aws_network_acl" "database" {
     rule_no    = 110
     protocol   = "tcp"
     from_port  = 1024
-    to_port    = 65535 # Ephemeral ports
+    to_port    = 65535
     cidr_block = aws_vpc.main.cidr_block
     action     = "allow"
   }
@@ -501,7 +523,7 @@ resource "aws_network_acl" "database" {
     rule_no    = 110
     protocol   = "tcp"
     from_port  = 1024
-    to_port    = 65535 # Ephemeral ports
+    to_port    = 65535
     cidr_block = "0.0.0.0/0"
     action     = "allow"
   }
@@ -515,7 +537,6 @@ resource "aws_network_acl" "database" {
   )
 }
 
-# VPN Gateway (optional)
 resource "aws_vpn_gateway" "main" {
   count = var.enable_vpn_gateway ? 1 : 0
 
@@ -529,5 +550,3 @@ resource "aws_vpn_gateway" "main" {
     var.tags
   )
 }
-
-

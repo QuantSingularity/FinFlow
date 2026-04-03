@@ -1,111 +1,107 @@
 #!/bin/bash
 # Setup script for FinFlow infrastructure
-# This script sets up the entire infrastructure from scratch
+set -euo pipefail
 
-set -e
-
-# Set colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
+RED='\033[0;31m'
+NC='\033[0m'
 
-# Function to print section header
-print_header() {
-  echo -e "\n${BLUE}=== $1 ===${NC}"
-}
+INFRA_DIR="${INFRA_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
-# Function to print step
-print_step() {
-  echo -e "${YELLOW}>>> $1${NC}"
-}
+print_header() { echo -e "\n${BLUE}=== $1 ===${NC}"; }
+print_step()   { echo -e "${YELLOW}>>> $1${NC}"; }
+print_error()  { echo -e "${RED}ERROR: $1${NC}" >&2; }
 
-# Check if AWS CLI is configured
 print_header "Checking prerequisites"
 print_step "Checking AWS CLI configuration"
 if ! aws sts get-caller-identity &>/dev/null; then
-  echo "AWS CLI is not configured. Please run 'aws configure' first."
+  print_error "AWS CLI is not configured. Run 'aws configure' first."
   exit 1
 fi
 
 print_step "Checking required tools"
+MISSING=()
 for tool in terraform ansible kubectl helm; do
-  if ! command -v $tool &>/dev/null; then
-    echo "$tool is not installed. Please install it first."
-    exit 1
+  if ! command -v "$tool" &>/dev/null; then
+    MISSING+=("$tool")
   fi
 done
-
-# Create S3 bucket for Terraform state if it doesn't exist
-print_header "Setting up Terraform backend"
-print_step "Creating S3 bucket for Terraform state"
-BUCKET_NAME="finflow-terraform-state"
-REGION=$(aws configure get region)
-if ! aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null; then
-  aws s3api create-bucket \
-    --bucket $BUCKET_NAME \
-    --region $REGION \
-    --create-bucket-configuration LocationConstraint=$REGION
-  
-  aws s3api put-bucket-versioning \
-    --bucket $BUCKET_NAME \
-    --versioning-configuration Status=Enabled
-  
-  aws s3api put-bucket-encryption \
-    --bucket $BUCKET_NAME \
-    --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
+if [ ${#MISSING[@]} -gt 0 ]; then
+  print_error "Missing tools: ${MISSING[*]}"
+  exit 1
 fi
 
-# Create DynamoDB table for Terraform state locking if it doesn't exist
-print_step "Creating DynamoDB table for Terraform state locking"
+REGION=$(aws configure get region 2>/dev/null || echo "us-west-2")
+BUCKET_NAME="finflow-terraform-state"
 TABLE_NAME="finflow-terraform-locks"
-if ! aws dynamodb describe-table --table-name $TABLE_NAME 2>/dev/null; then
+
+print_header "Setting up Terraform backend"
+print_step "Ensuring S3 bucket: $BUCKET_NAME"
+if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+  if [ "$REGION" = "us-east-1" ]; then
+    aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$REGION"
+  else
+    aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$REGION" \
+      --create-bucket-configuration LocationConstraint="$REGION"
+  fi
+  aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" \
+    --versioning-configuration Status=Enabled
+  aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" \
+    --server-side-encryption-configuration \
+    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+  aws s3api put-public-access-block --bucket "$BUCKET_NAME" \
+    --public-access-block-configuration \
+    'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true'
+  echo "S3 bucket created."
+fi
+
+print_step "Ensuring DynamoDB lock table: $TABLE_NAME"
+if ! aws dynamodb describe-table --table-name "$TABLE_NAME" &>/dev/null; then
   aws dynamodb create-table \
-    --table-name $TABLE_NAME \
+    --table-name "$TABLE_NAME" \
     --attribute-definitions AttributeName=LockID,AttributeType=S \
     --key-schema AttributeName=LockID,KeyType=HASH \
     --billing-mode PAY_PER_REQUEST \
-    --region $REGION
+    --region "$REGION"
+  echo "DynamoDB table created."
 fi
 
-# Initialize Terraform
 print_header "Initializing Terraform"
-print_step "Running terraform init"
-cd /FinFlow/infrastructure/terraform
-terraform init
+cd "$INFRA_DIR/terraform"
+terraform init -upgrade
 
-# Apply Terraform configuration
+print_header "Validating Terraform"
+terraform validate
+
+print_header "Planning Terraform"
+terraform plan -out=tfplan
+
 print_header "Applying Terraform configuration"
-print_step "Running terraform apply"
-terraform apply -auto-approve
+terraform apply tfplan
 
-# Configure kubectl
 print_header "Configuring kubectl"
-print_step "Setting up kubectl configuration"
 CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
-aws eks update-kubeconfig --region $REGION --name $CLUSTER_NAME
+aws eks update-kubeconfig --region "$REGION" --name "$CLUSTER_NAME"
 
-# Run Ansible playbook
 print_header "Running Ansible playbooks"
-print_step "Running Ansible site.yml"
-cd /FinFlow/infrastructure/ansible
-ansible-playbook -i inventory/prod site.yml
+cd "$INFRA_DIR/ansible"
+if [ -f "inventory/prod" ]; then
+  ansible-playbook -i inventory/prod site.yml
+else
+  echo "No Ansible inventory found at inventory/prod — skipping Ansible step."
+fi
 
-# Deploy applications
 print_header "Deploying applications"
-print_step "Running deployment script"
-cd /finflow-infra
-./scripts/deploy.sh
+INFRA_DIR="$INFRA_DIR" bash "$INFRA_DIR/scripts/deploy.sh"
 
-# Set up monitoring
 print_header "Setting up monitoring"
-print_step "Running monitoring setup script"
-./scripts/monitoring-setup.sh
+INFRA_DIR="$INFRA_DIR" bash "$INFRA_DIR/scripts/monitoring-setup.sh"
 
 print_header "Infrastructure setup complete"
-echo "You can now access the following resources:"
-echo "- Kubernetes Dashboard: $(kubectl get svc kubernetes-dashboard -n kube-system -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
-echo "- Grafana: $(kubectl get svc grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
-echo "- Kibana: $(kubectl get svc kibana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
-echo "- Frontend: $(kubectl get svc frontend -n finflow-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
-echo "- API Gateway: $(kubectl get svc api-gateway -n finflow-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+echo -e "${GREEN}Setup finished!${NC}"
+echo "Grafana   : https://grafana.finflow.example.com"
+echo "Kibana    : https://kibana.finflow.example.com"
+echo "Frontend  : $(kubectl get svc frontend -n finflow-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo 'pending')"
+echo "API       : $(kubectl get svc api-gateway -n finflow-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo 'pending')"

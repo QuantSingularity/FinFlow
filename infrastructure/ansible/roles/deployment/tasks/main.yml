@@ -1,6 +1,4 @@
 ---
-# Deployment role for automating application deployment
-
 - name: Create deployment directories
   file:
     path: "{{ item }}"
@@ -122,24 +120,32 @@
         key: "jwt-secret",
         value: "{{ vault_jwt_secret }}",
       }
+  no_log: true
   when: inventory_hostname == groups['k8s_nodes'][0]
 
-- name: Set up CI/CD integration
+- name: Install ArgoCD
   block:
-    - name: Install ArgoCD
+    - name: Create argocd namespace
+      k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: argocd
+
+    - name: Apply ArgoCD manifests
       command: >
-        kubectl create namespace argocd &&
-        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+        kubectl apply -n argocd
+        -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.9.3/manifests/install.yaml
       args:
         creates: /opt/finflow/deployments/.argocd_installed
-      when: inventory_hostname == groups['k8s_nodes'][0]
 
     - name: Mark ArgoCD as installed
       file:
         path: /opt/finflow/deployments/.argocd_installed
         state: touch
         mode: "0644"
-      when: inventory_hostname == groups['k8s_nodes'][0]
 
     - name: Configure ArgoCD application
       k8s:
@@ -164,6 +170,7 @@
               automated:
                 prune: true
                 selfHeal: true
-      when:
-        - inventory_hostname == groups['k8s_nodes'][0]
-        - git_repo_url is defined
+              syncOptions:
+                - CreateNamespace=true
+      when: git_repo_url is defined
+  when: inventory_hostname == groups['k8s_nodes'][0]

@@ -128,3 +128,67 @@ module "secrets_manager" {
   environment = var.environment
   tags        = var.tags
 }
+
+# ── IRSA: Secrets Manager access role for application pods ───────────────────
+# Placed here (not in iam module) to avoid circular dependency with the EKS module.
+locals {
+  oidc_issuer_url = module.eks.cluster_oidc_issuer_url
+  oidc_provider   = replace(local.oidc_issuer_url, "https://", "")
+}
+
+resource "aws_iam_role" "finflow_app_irsa" {
+  name = "${var.environment}-finflow-app-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.oidc_provider}"
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${local.oidc_provider}:sub" = "system:serviceaccount:finflow-${var.environment}:finflow-app-sa"
+            "${local.oidc_provider}:aud" = "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(var.tags, {
+    Name        = "${var.environment}-finflow-app-irsa-role"
+    Environment = var.environment
+  })
+}
+
+resource "aws_iam_policy" "finflow_secrets_read" {
+  name        = "${var.environment}-finflow-secrets-read-policy"
+  description = "Allow FinFlow application pods to read secrets from Secrets Manager"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.secrets_manager_prefix}*"
+      },
+      {
+        Effect = "Allow"
+        Action = ["kms:Decrypt", "kms:DescribeKey"]
+        Resource = aws_kms_key.finflow_key.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "finflow_secrets_read" {
+  role       = aws_iam_role.finflow_app_irsa.name
+  policy_arn = aws_iam_policy.finflow_secrets_read.arn
+}

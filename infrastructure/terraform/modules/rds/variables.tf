@@ -49,10 +49,14 @@ variable "rds_security_group_id" {
   type        = string
 }
 
+variable "rds_monitoring_role_arn" {
+  description = "ARN of the IAM role for RDS enhanced monitoring"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Additional tags for resources"
   type        = map(string)
   default     = {}
 }
-
-

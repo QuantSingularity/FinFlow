@@ -18,6 +18,12 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "cluster_security_group_id" {
+  description = "Security group ID for the EKS cluster control plane"
+  type        = string
+  default     = ""
+}
+
 variable "node_groups" {
   description = "Map of EKS node group configurations"
   type        = map(any)
@@ -43,5 +49,3 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
-
-

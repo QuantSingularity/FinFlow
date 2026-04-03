@@ -1,6 +1,24 @@
 apiVersion: v1
 kind: Service
 metadata:
+  name: zookeeper
+  namespace: finflow-prod
+  labels:
+    app: zookeeper
+    component: messaging
+spec:
+  clusterIP: None
+  ports:
+    - port: 2181
+      targetPort: 2181
+      protocol: TCP
+      name: client
+  selector:
+    app: zookeeper
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: kafka
   namespace: finflow-prod
   labels:
@@ -13,5 +31,9 @@ spec:
       targetPort: 9092
       protocol: TCP
       name: kafka
+    - port: 9308
+      targetPort: 9308
+      protocol: TCP
+      name: metrics
   selector:
     app: kafka

@@ -8,12 +8,11 @@ locals {
   )
 }
 
-# Create ECR repositories
 resource "aws_ecr_repository" "main" {
   for_each = toset(var.repositories)
 
   name                 = "finflow-${var.environment}-${each.key}"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = var.enable_scan_on_push
@@ -31,7 +30,6 @@ resource "aws_ecr_repository" "main" {
   )
 }
 
-# Create lifecycle policy for each repository
 resource "aws_ecr_lifecycle_policy" "main" {
   for_each = toset(var.repositories)
 
@@ -41,11 +39,25 @@ resource "aws_ecr_lifecycle_policy" "main" {
     rules = [
       {
         rulePriority = 1
-        description  = "Keep last ${var.image_retention_count} images"
+        description  = "Keep last ${var.image_retention_count} tagged images"
         selection = {
-          tagStatus   = "any"
-          countType   = "imageCountMoreThan"
-          countNumber = var.image_retention_count
+          tagStatus     = "tagged"
+          tagPrefixList = ["v"]
+          countType     = "imageCountMoreThan"
+          countNumber   = var.image_retention_count
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Expire untagged images older than 14 days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 14
         }
         action = {
           type = "expire"
@@ -55,7 +67,6 @@ resource "aws_ecr_lifecycle_policy" "main" {
   })
 }
 
-# Create repository policy for each repository
 resource "aws_ecr_repository_policy" "main" {
   for_each = toset(var.repositories)
 
@@ -65,10 +76,10 @@ resource "aws_ecr_repository_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowPull"
+        Sid    = "AllowPullFromSameAccount"
         Effect = "Allow"
         Principal = {
-          AWS = "*"
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action = [
           "ecr:GetDownloadUrlForLayer",
@@ -79,3 +90,5 @@ resource "aws_ecr_repository_policy" "main" {
     ]
   })
 }
+
+data "aws_caller_identity" "current" {}

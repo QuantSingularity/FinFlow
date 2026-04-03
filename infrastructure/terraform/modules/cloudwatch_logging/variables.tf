@@ -14,4 +14,8 @@ variable "tags" {
   default     = {}
 }
 
-
+variable "cloudwatch_logs_role_arn" {
+  description = "ARN of the IAM role for CloudWatch Logs (passed in after creation)"
+  type        = string
+  default     = ""
+}

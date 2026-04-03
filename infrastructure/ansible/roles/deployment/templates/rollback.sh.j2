@@ -1,0 +1,26 @@
+#!/bin/bash
+# Rollback script for FinFlow services
+set -euo pipefail
+
+NAMESPACE="{{ namespace | default('finflow-prod') }}"
+COMPONENT="${1:-}"
+REVISION="${2:-}"
+
+if [ -z "$COMPONENT" ]; then
+  echo "Usage: $0 <component> [revision]"
+  echo "Components: frontend api-gateway auth-service payments-service accounting-service analytics-service credit-engine"
+  exit 1
+fi
+
+if [ -n "$REVISION" ]; then
+  echo "Rolling back $COMPONENT to revision $REVISION..."
+  kubectl rollout undo deployment/"$COMPONENT" -n "$NAMESPACE" --to-revision="$REVISION"
+else
+  echo "Rolling back $COMPONENT to previous revision..."
+  kubectl rollout undo deployment/"$COMPONENT" -n "$NAMESPACE"
+fi
+
+echo "Waiting for rollback to complete..."
+kubectl rollout status deployment/"$COMPONENT" -n "$NAMESPACE" --timeout=300s
+echo "Rollback of $COMPONENT complete."
+kubectl get pods -n "$NAMESPACE" -l "app=$COMPONENT"

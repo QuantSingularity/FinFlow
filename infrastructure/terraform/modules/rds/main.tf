@@ -8,7 +8,6 @@ locals {
   )
 }
 
-# DB subnet group
 resource "aws_db_subnet_group" "main" {
   name        = "finflow-${var.environment}-subnet-group"
   description = "Subnet group for FinFlow RDS instances"
@@ -22,10 +21,9 @@ resource "aws_db_subnet_group" "main" {
   )
 }
 
-# DB parameter group
 resource "aws_db_parameter_group" "postgres" {
   name        = "finflow-${var.environment}-postgres-params"
-  family      = "postgres${replace(var.db_engine_version, ".", "")}"
+  family      = "postgres${var.db_engine_version}"
   description = "Parameter group for FinFlow PostgreSQL instances"
 
   parameter {
@@ -45,7 +43,12 @@ resource "aws_db_parameter_group" "postgres" {
 
   parameter {
     name  = "max_connections"
-    value = "100"
+    value = "200"
+  }
+
+  parameter {
+    name  = "shared_preload_libraries"
+    value = "pg_stat_statements"
   }
 
   tags = merge(
@@ -54,9 +57,20 @@ resource "aws_db_parameter_group" "postgres" {
     },
     local.common_tags
   )
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# RDS instances
+resource "random_password" "db_password" {
+  for_each = var.databases
+
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
 resource "aws_db_instance" "main" {
   for_each = var.databases
 
@@ -65,9 +79,10 @@ resource "aws_db_instance" "main" {
   engine_version    = var.db_engine_version
   instance_class    = var.db_instance_class
   allocated_storage = var.db_allocated_storage
-  storage_type      = "gp2"
+  max_allocated_storage = var.db_allocated_storage * 3
+  storage_type      = "gp3"
   storage_encrypted = true
-  kms_key_id        = var.kms_key_id # Use the centralized KMS key
+  kms_key_id        = var.kms_key_id
 
   db_name  = each.value.name
   username = "postgres"
@@ -84,12 +99,17 @@ resource "aws_db_instance" "main" {
 
   multi_az                  = true
   skip_final_snapshot       = false
-  final_snapshot_identifier = "finflow-${var.environment}-${each.value.name}-final"
+  final_snapshot_identifier = "finflow-${var.environment}-${each.value.name}-final-${replace(timestamp(), ":", "-")}"
   deletion_protection       = true
+  copy_tags_to_snapshot     = true
 
-  enabled_cloudwatch_logs_exports       = ["postgresql", "upgrade", "audit"] # Enable audit logs
-  performance_insights_enabled          = true                               # Enable performance insights for enhanced monitoring
-  performance_insights_retention_period = 7                                  # Retain performance insights for 7 days
+  enabled_cloudwatch_logs_exports       = ["postgresql", "upgrade"]
+  performance_insights_enabled          = true
+  performance_insights_retention_period = 7
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = var.rds_monitoring_role_arn
+
+  auto_minor_version_upgrade = true
 
   tags = merge(
     {
@@ -97,24 +117,19 @@ resource "aws_db_instance" "main" {
     },
     local.common_tags
   )
+
+  lifecycle {
+    ignore_changes = [final_snapshot_identifier]
+  }
 }
 
-# Generate random passwords for RDS instances
-resource "random_password" "db_password" {
-  for_each = var.databases
-
-  length           = 16
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
-}
-
-# Store passwords in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "db_credentials" {
   for_each = var.databases
 
-  name        = "finflow/${var.environment}/db/${each.value.name}"
-  description = "Credentials for FinFlow ${each.value.name} database"
-  kms_key_id  = var.kms_key_id # Use the centralized KMS key for secrets
+  name                    = "finflow/${var.environment}/db/${each.value.name}"
+  description             = "Credentials for FinFlow ${each.value.name} database"
+  kms_key_id              = var.kms_key_id
+  recovery_window_in_days = 7
 
   tags = local.common_tags
 }
@@ -133,5 +148,3 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
     url      = "postgresql://postgres:${random_password.db_password[each.key].result}@${aws_db_instance.main[each.key].address}:${aws_db_instance.main[each.key].port}/${each.value.name}"
   })
 }
-
-

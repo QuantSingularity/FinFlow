@@ -1,5 +1,3 @@
-# Secrets Manager Module Variables
-
 variable "prefix" {
   description = "Prefix for secrets in AWS Secrets Manager"
   type        = string

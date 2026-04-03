@@ -189,3 +189,14 @@ audit-reports/
 # Script outputs
 *.output
 run_*.log
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform/
+.terraform.lock.hcl

@@ -46,7 +46,7 @@ spec:
             - name: ANALYTICS_SERVICE_URL
               value: "http://analytics-service:3004"
             - name: CREDIT_SERVICE_URL
-              value: "http://credit-engine:8000"
+              value: "http://credit-engine:8001"
           resources:
             requests:
               cpu: 200m

@@ -19,7 +19,7 @@ output "cluster_security_group_id" {
 }
 
 output "node_security_group_id" {
-  description = "Security group ID attached to the EKS nodes"
+  description = "Security group IDs attached to the EKS nodes"
   value       = aws_eks_cluster.main.vpc_config[0].security_group_ids
 }
 
@@ -48,9 +48,5 @@ output "load_balancer_zone_id" {
   value       = data.aws_elb_hosted_zone_id.main.id
 }
 
-# Data sources for outputs
 data "aws_region" "current" {}
-
 data "aws_elb_hosted_zone_id" "main" {}
-
-

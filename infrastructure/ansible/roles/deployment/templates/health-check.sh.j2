@@ -1,0 +1,46 @@
+#!/bin/bash
+# Health check script for FinFlow services
+set -euo pipefail
+
+NAMESPACE="{{ namespace | default('finflow-prod') }}"
+GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
+FAILED=0
+
+check_deployment() {
+  local name=$1
+  local desired ready
+  desired=$(kubectl get deployment "$name" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)
+  ready=$(kubectl get deployment "$name" -n "$NAMESPACE" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+  if [ "$ready" -ge "$desired" ] && [ "$desired" -gt 0 ]; then
+    echo -e "${GREEN}✓ $name: $ready/$desired replicas ready${NC}"
+  else
+    echo -e "${RED}✗ $name: $ready/$desired replicas ready${NC}"
+    FAILED=$((FAILED + 1))
+  fi
+}
+
+echo "=== FinFlow Health Check ==="
+for svc in frontend api-gateway auth-service payments-service accounting-service analytics-service credit-engine; do
+  check_deployment "$svc"
+done
+
+echo ""
+echo "=== Database StatefulSets ==="
+for db in auth-db payments-db accounting-db analytics-db kafka zookeeper; do
+  ready=$(kubectl get statefulset "$db" -n "$NAMESPACE" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)
+  desired=$(kubectl get statefulset "$db" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)
+  if [ "$ready" -ge "$desired" ] && [ "$desired" -gt 0 ]; then
+    echo -e "${GREEN}✓ $db: $ready/$desired replicas ready${NC}"
+  else
+    echo -e "${RED}✗ $db: $ready/$desired replicas ready${NC}"
+    FAILED=$((FAILED + 1))
+  fi
+done
+
+echo ""
+if [ "$FAILED" -eq 0 ]; then
+  echo -e "${GREEN}All services healthy!${NC}"
+else
+  echo -e "${RED}$FAILED service(s) unhealthy.${NC}"
+  exit 1
+fi

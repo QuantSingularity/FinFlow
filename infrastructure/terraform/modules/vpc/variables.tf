@@ -34,10 +34,14 @@ variable "enable_vpn_gateway" {
   default     = false
 }
 
+variable "bastion_allowed_cidrs" {
+  description = "List of CIDR blocks allowed to SSH to the bastion host"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "tags" {
   description = "Additional tags for resources"
   type        = map(string)
   default     = {}
 }
-
-

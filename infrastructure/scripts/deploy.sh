@@ -1,104 +1,94 @@
 #!/bin/bash
 # Deployment script for FinFlow applications
-# This script deploys all FinFlow microservices to Kubernetes
+set -euo pipefail
 
-set -e
-
-# Set colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print section header
-print_header() {
-  echo -e "\n${BLUE}=== $1 ===${NC}"
-}
+INFRA_DIR="${INFRA_DIR:-/opt/finflow/infrastructure}"
+NAMESPACE="${NAMESPACE:-finflow-prod}"
+REGISTRY="${REGISTRY:-}"
+TAG="${TAG:-latest}"
 
-# Function to print step
-print_step() {
-  echo -e "${YELLOW}>>> $1${NC}"
-}
+print_header() { echo -e "\n${BLUE}=== $1 ===${NC}"; }
+print_step()   { echo -e "${YELLOW}>>> $1${NC}"; }
+print_error()  { echo -e "${RED}ERROR: $1${NC}" >&2; }
 
-# Function to check if kubectl is connected to the cluster
 check_kubectl() {
   if ! kubectl get nodes &>/dev/null; then
-    echo -e "${RED}Error: kubectl is not connected to the cluster.${NC}"
-    echo "Please run 'aws eks update-kubeconfig --region <region> --name <cluster-name>' first."
+    print_error "kubectl is not connected to the cluster."
+    echo "Run: aws eks update-kubeconfig --region <region> --name <cluster-name>"
     exit 1
   fi
 }
 
-# Check kubectl connection
+apply_manifests() {
+  local component=$1
+  local dir="$INFRA_DIR/kubernetes/$component"
+
+  if [ ! -d "$dir" ]; then
+    print_error "Manifest directory not found: $dir"
+    return 1
+  fi
+
+  if [ -n "$REGISTRY" ] && [ -n "$TAG" ]; then
+    for f in "$dir"/*.yaml; do
+      sed -e "s|\${REGISTRY}|${REGISTRY}|g" -e "s|\${TAG}|${TAG}|g" "$f" | \
+        kubectl apply -f - -n "$NAMESPACE"
+    done
+  else
+    kubectl apply -f "$dir/" -n "$NAMESPACE"
+  fi
+}
+
 print_header "Checking prerequisites"
-print_step "Verifying kubectl connection"
 check_kubectl
 
-# Create namespaces if they don't exist
 print_header "Setting up namespaces"
-print_step "Creating finflow-prod namespace"
-kubectl create namespace finflow-prod --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
-# Apply database configurations
 print_header "Deploying databases"
-print_step "Deploying database StatefulSets and Services"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/databases/
+print_step "Deploying ZooKeeper"
+apply_manifests "databases"
+kubectl rollout status statefulset/zookeeper -n "$NAMESPACE" --timeout=300s
 
-# Wait for databases to be ready
-print_step "Waiting for databases to be ready"
-kubectl rollout status statefulset/auth-db -n finflow-prod --timeout=300s
-kubectl rollout status statefulset/payments-db -n finflow-prod --timeout=300s
-kubectl rollout status statefulset/accounting-db -n finflow-prod --timeout=300s
-kubectl rollout status statefulset/analytics-db -n finflow-prod --timeout=300s
-kubectl rollout status statefulset/kafka -n finflow-prod --timeout=300s
+print_step "Waiting for Kafka"
+kubectl rollout status statefulset/kafka -n "$NAMESPACE" --timeout=300s
 
-# Deploy backend services
+print_step "Waiting for databases"
+for db in auth-db payments-db accounting-db analytics-db; do
+  kubectl rollout status statefulset/$db -n "$NAMESPACE" --timeout=300s
+done
+
 print_header "Deploying backend services"
-print_step "Deploying Auth Service"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/auth-service/
-kubectl rollout status deployment/auth-service -n finflow-prod --timeout=300s
+for svc in auth-service payments-service accounting-service analytics-service credit-engine; do
+  print_step "Deploying $svc"
+  apply_manifests "$svc"
+  kubectl rollout status deployment/$svc -n "$NAMESPACE" --timeout=300s
+done
 
-print_step "Deploying Payments Service"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/payments-service/
-kubectl rollout status deployment/payments-service -n finflow-prod --timeout=300s
-
-print_step "Deploying Accounting Service"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/accounting-service/
-kubectl rollout status deployment/accounting-service -n finflow-prod --timeout=300s
-
-print_step "Deploying Analytics Service"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/analytics-service/
-kubectl rollout status deployment/analytics-service -n finflow-prod --timeout=300s
-
-print_step "Deploying Credit Engine"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/credit-engine/
-kubectl rollout status deployment/credit-engine -n finflow-prod --timeout=300s
-
-# Deploy API Gateway
 print_header "Deploying API Gateway"
-print_step "Deploying API Gateway service"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/api-gateway/
-kubectl rollout status deployment/api-gateway -n finflow-prod --timeout=300s
+apply_manifests "api-gateway"
+kubectl rollout status deployment/api-gateway -n "$NAMESPACE" --timeout=300s
 
-# Deploy Frontend
 print_header "Deploying Frontend"
-print_step "Deploying Frontend application"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/frontend/
-kubectl rollout status deployment/frontend -n finflow-prod --timeout=300s
+apply_manifests "frontend"
+kubectl rollout status deployment/frontend -n "$NAMESPACE" --timeout=300s
 
-# Apply ingress configurations
-print_header "Configuring Ingress"
-print_step "Applying Ingress rules"
-kubectl apply -f /FinFlow/infrastructure/kubernetes/frontend/ingress.yaml
-kubectl apply -f /FinFlow/infrastructure/kubernetes/api-gateway/ingress.yaml
-
-# Verify deployments
 print_header "Verifying deployments"
-print_step "Checking service endpoints"
-echo "Frontend service: $(kubectl get svc frontend -n finflow-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
-echo "API Gateway service: $(kubectl get svc api-gateway -n finflow-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+kubectl get deployments -n "$NAMESPACE"
+kubectl get pods -n "$NAMESPACE"
+kubectl get services -n "$NAMESPACE"
+
+FRONTEND_HOST=$(kubectl get svc frontend -n "$NAMESPACE" \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
+API_HOST=$(kubectl get svc api-gateway -n "$NAMESPACE" \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
 
 print_header "Deployment complete"
 echo -e "${GREEN}All FinFlow services have been successfully deployed!${NC}"
-echo "You can access the application at: $(kubectl get svc frontend -n finflow-prod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+echo "Frontend  : https://finflow.example.com (LB: $FRONTEND_HOST)"
+echo "API       : https://api.finflow.example.com (LB: $API_HOST)"

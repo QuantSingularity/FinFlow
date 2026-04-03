@@ -26,11 +26,13 @@ output "eks_cluster_name" {
 output "eks_cluster_endpoint" {
   description = "The endpoint for the EKS cluster"
   value       = module.eks.cluster_endpoint
+  sensitive   = true
 }
 
 output "eks_cluster_certificate_authority_data" {
   description = "The certificate authority data for the EKS cluster"
   value       = module.eks.cluster_certificate_authority_data
+  sensitive   = true
 }
 
 output "eks_oidc_provider_arn" {
@@ -53,4 +55,33 @@ output "secrets_manager_secret_arn" {
   value       = module.secrets_manager.secret_arn
 }
 
+output "ecr_repository_urls" {
+  description = "The URLs of the ECR repositories"
+  value       = module.ecr.repository_urls
+}
 
+output "bastion_public_ip" {
+  description = "The public IP of the bastion host"
+  value       = var.enable_bastion ? module.bastion[0].public_ip : null
+}
+
+output "kubeconfig_command" {
+  description = "Command to configure kubectl"
+  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"
+}
+
+output "rds_endpoints" {
+  description = "RDS instance endpoints"
+  value       = module.rds.db_instance_endpoints
+  sensitive   = true
+}
+
+output "cloudtrail_arn" {
+  description = "ARN of the CloudTrail trail"
+  value       = module.cloudwatch_logging.cloudtrail_arn
+}
+
+output "finflow_app_irsa_role_arn" {
+  description = "ARN of the IRSA role for FinFlow application pods"
+  value       = aws_iam_role.finflow_app_irsa.arn
+}

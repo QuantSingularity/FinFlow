@@ -1,5 +1,3 @@
-# Variables for Terraform configuration
-
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
@@ -10,6 +8,11 @@ variable "environment" {
   description = "Environment name (e.g., dev, staging, prod)"
   type        = string
   default     = "prod"
+
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, staging, prod."
+  }
 }
 
 variable "vpc_cidr" {
@@ -51,7 +54,7 @@ variable "cluster_name" {
 variable "cluster_version" {
   description = "Kubernetes version for the EKS cluster"
   type        = string
-  default     = "1.28"
+  default     = "1.29"
 }
 
 variable "node_groups" {
@@ -124,6 +127,12 @@ variable "enable_bastion" {
   default     = true
 }
 
+variable "bastion_allowed_cidrs" {
+  description = "CIDR blocks allowed to access the bastion host via SSH"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "tags" {
   description = "Additional tags for resources"
   type        = map(string)
@@ -143,9 +152,7 @@ variable "secrets_manager_prefix" {
 }
 
 variable "cloudtrail_s3_bucket_name" {
-  description = "Name of the S3 bucket for CloudTrail logs"
+  description = "Base name of the S3 bucket for CloudTrail logs (environment suffix appended automatically)"
   type        = string
   default     = "finflow-cloudtrail-logs"
 }
-
-

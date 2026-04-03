@@ -23,11 +23,6 @@ output "db_subnet_group_id" {
   value       = aws_db_subnet_group.main.id
 }
 
-output "security_group_id" {
-  description = "The ID of the security group for RDS"
-  value       = var.create_security_group ? aws_security_group.rds[0].id : null
-}
-
 output "db_parameter_group_id" {
   description = "The ID of the DB parameter group"
   value       = aws_db_parameter_group.postgres.id

@@ -1,163 +1,129 @@
 #!/bin/bash
 # Backup script for FinFlow infrastructure
-# This script creates backups of databases and configuration
+set -euo pipefail
 
-set -e
-
-# Set colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print section header
-print_header() {
-  echo -e "\n${BLUE}=== $1 ===${NC}"
-}
+INFRA_DIR="${INFRA_DIR:-/opt/finflow/infrastructure}"
+BACKUP_DIR="/finflow-backups/$(date +%Y-%m-%d)"
+S3_BUCKET="${S3_BUCKET:-finflow-backups}"
+NAMESPACE="${NAMESPACE:-finflow-prod}"
+REGION=$(aws configure get region 2>/dev/null || echo "us-west-2")
 
-# Function to print step
-print_step() {
-  echo -e "${YELLOW}>>> $1${NC}"
-}
+print_header() { echo -e "\n${BLUE}=== $1 ===${NC}"; }
+print_step()   { echo -e "${YELLOW}>>> $1${NC}"; }
+print_error()  { echo -e "${RED}ERROR: $1${NC}" >&2; }
 
-# Function to check if kubectl is connected to the cluster
 check_kubectl() {
   if ! kubectl get nodes &>/dev/null; then
-    echo -e "${RED}Error: kubectl is not connected to the cluster.${NC}"
-    echo "Please run 'aws eks update-kubeconfig --region <region> --name <cluster-name>' first."
+    print_error "kubectl is not connected to the cluster."
+    echo "Run: aws eks update-kubeconfig --region <region> --name <cluster-name>"
     exit 1
   fi
 }
 
-# Set backup directory
-BACKUP_DIR="/finflow-backups/$(date +%Y-%m-%d)"
-S3_BUCKET="finflow-backups"
-REGION=$(aws configure get region)
-
-# Check kubectl connection
 print_header "Checking prerequisites"
 print_step "Verifying kubectl connection"
 check_kubectl
 
-# Create backup directory
 print_header "Setting up backup directory"
-print_step "Creating local backup directory"
-mkdir -p $BACKUP_DIR/kubernetes
-mkdir -p $BACKUP_DIR/databases
+mkdir -p "$BACKUP_DIR/kubernetes" "$BACKUP_DIR/databases" "$BACKUP_DIR/terraform" "$BACKUP_DIR/ansible"
 
-# Backup Kubernetes resources
 print_header "Backing up Kubernetes resources"
-print_step "Backing up all resources in finflow-prod namespace"
-kubectl get all -n finflow-prod -o yaml > $BACKUP_DIR/kubernetes/all-resources.yaml
+print_step "Backing up all resources in $NAMESPACE namespace"
+kubectl get all -n "$NAMESPACE" -o yaml > "$BACKUP_DIR/kubernetes/all-resources.yaml"
+kubectl get configmaps -n "$NAMESPACE" -o yaml > "$BACKUP_DIR/kubernetes/configmaps.yaml"
+kubectl get secrets -n "$NAMESPACE" -o yaml > "$BACKUP_DIR/kubernetes/secrets.yaml"
+kubectl get pvc -n "$NAMESPACE" -o yaml > "$BACKUP_DIR/kubernetes/pvcs.yaml"
+kubectl get ingress -n "$NAMESPACE" -o yaml > "$BACKUP_DIR/kubernetes/ingress.yaml"
 
-print_step "Backing up ConfigMaps"
-kubectl get configmaps -n finflow-prod -o yaml > $BACKUP_DIR/kubernetes/configmaps.yaml
-
-print_step "Backing up Secrets"
-kubectl get secrets -n finflow-prod -o yaml > $BACKUP_DIR/kubernetes/secrets.yaml
-
-print_step "Backing up PersistentVolumeClaims"
-kubectl get pvc -n finflow-prod -o yaml > $BACKUP_DIR/kubernetes/pvcs.yaml
-
-# Backup databases
 print_header "Backing up databases"
 
-# Function to backup a PostgreSQL database
 backup_postgres() {
   local service=$1
   local db_name=$2
   print_step "Backing up $service database"
-  
-  # Create a temporary pod to run pg_dump
-  cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: pg-dump-$service
-  namespace: finflow-prod
-spec:
-  containers:
-  - name: pg-dump
-    image: postgres:14
-    command: ["sleep", "3600"]
-    volumeMounts:
-    - name: backup-volume
-      mountPath: /backup
-  volumes:
-  - name: backup-volume
-    emptyDir: {}
-EOF
 
-  # Wait for the pod to be ready
-  kubectl wait --for=condition=Ready pod/pg-dump-$service -n finflow-prod --timeout=60s
+  local secret_name="${service}-credentials"
+  local db_password
+  db_password=$(kubectl get secret "$secret_name" -n "$NAMESPACE" \
+    -o jsonpath='{.data.password}' 2>/dev/null | base64 -d) || {
+    print_error "Could not retrieve password for $service. Skipping."
+    return 1
+  }
 
-  # Run pg_dump
-  kubectl exec -n finflow-prod pg-dump-$service -- bash -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_dump -h $service -U postgres -d $db_name -F c -f /backup/$service-$(date +%Y-%m-%d).dump"
+  kubectl run "pg-dump-${service}" \
+    --image=postgres:14 \
+    --restart=Never \
+    --namespace="$NAMESPACE" \
+    --env="PGPASSWORD=${db_password}" \
+    --command -- sleep 3600 2>/dev/null || true
 
-  # Copy the backup file from the pod
-  kubectl cp finflow-prod/pg-dump-$service:/backup/$service-$(date +%Y-%m-%d).dump $BACKUP_DIR/databases/$service-$(date +%Y-%m-%d).dump
+  kubectl wait --for=condition=Ready "pod/pg-dump-${service}" \
+    -n "$NAMESPACE" --timeout=60s
 
-  # Delete the temporary pod
-  kubectl delete pod pg-dump-$service -n finflow-prod
+  local dump_file="/tmp/${service}-$(date +%Y-%m-%d).dump"
+  kubectl exec -n "$NAMESPACE" "pg-dump-${service}" -- \
+    pg_dump -h "$service" -U postgres -d "$db_name" -F c -f "$dump_file"
+
+  kubectl cp "${NAMESPACE}/pg-dump-${service}:${dump_file}" \
+    "$BACKUP_DIR/databases/${service}-$(date +%Y-%m-%d).dump"
+
+  kubectl delete pod "pg-dump-${service}" -n "$NAMESPACE" --grace-period=0 2>/dev/null || true
 }
 
-# Backup each database
 backup_postgres "auth-db" "auth"
 backup_postgres "payments-db" "payments"
 backup_postgres "accounting-db" "accounting"
 backup_postgres "analytics-db" "analytics"
 
-# Backup Terraform state
 print_header "Backing up Terraform state"
-print_step "Copying Terraform state files"
-mkdir -p $BACKUP_DIR/terraform
-aws s3 cp s3://finflow-terraform-state $BACKUP_DIR/terraform --recursive
+aws s3 cp "s3://finflow-terraform-state" "$BACKUP_DIR/terraform" --recursive || \
+  print_error "Could not copy Terraform state - continuing"
 
-# Backup Ansible inventory and variables
 print_header "Backing up Ansible files"
-print_step "Copying Ansible inventory and variables"
-mkdir -p $BACKUP_DIR/ansible
-cp -r /FinFlow/infrastructure/ansible/inventory $BACKUP_DIR/ansible/
-cp -r /FinFlow/infrastructure/ansible/vars $BACKUP_DIR/ansible/
-
-# Create a compressed archive of all backups
-print_header "Creating compressed archive"
-print_step "Creating tar.gz archive of all backups"
-cd $(dirname $BACKUP_DIR)
-tar -czf finflow-backup-$(date +%Y-%m-%d).tar.gz $(basename $BACKUP_DIR)
-
-# Upload to S3 if bucket exists
-print_header "Uploading to S3"
-print_step "Checking if S3 bucket exists"
-if aws s3api head-bucket --bucket $S3_BUCKET 2>/dev/null; then
-  print_step "Uploading backup archive to S3"
-  aws s3 cp finflow-backup-$(date +%Y-%m-%d).tar.gz s3://$S3_BUCKET/
-else
-  print_step "Creating S3 bucket for backups"
-  aws s3api create-bucket \
-    --bucket $S3_BUCKET \
-    --region $REGION \
-    --create-bucket-configuration LocationConstraint=$REGION
-  
-  aws s3api put-bucket-versioning \
-    --bucket $S3_BUCKET \
-    --versioning-configuration Status=Enabled
-  
-  aws s3api put-bucket-encryption \
-    --bucket $S3_BUCKET \
-    --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
-  
-  print_step "Uploading backup archive to S3"
-  aws s3 cp finflow-backup-$(date +%Y-%m-%d).tar.gz s3://$S3_BUCKET/
+if [ -d "$INFRA_DIR/ansible" ]; then
+  cp -r "$INFRA_DIR/ansible/vars" "$BACKUP_DIR/ansible/" 2>/dev/null || true
+  [ -f "$INFRA_DIR/ansible/inventory.example" ] && \
+    cp "$INFRA_DIR/ansible/inventory.example" "$BACKUP_DIR/ansible/"
 fi
 
-# Cleanup old backups (keep last 7 days)
-print_header "Cleaning up old backups"
-print_step "Removing backups older than 7 days"
-find /finflow-backups -type d -name "????-??-??" -mtime +7 -exec rm -rf {} \;
+print_header "Creating compressed archive"
+ARCHIVE_NAME="finflow-backup-$(date +%Y-%m-%d).tar.gz"
+ARCHIVE_PATH="/finflow-backups/${ARCHIVE_NAME}"
+cd /finflow-backups
+tar -czf "$ARCHIVE_NAME" "$(basename "$BACKUP_DIR")"
+
+print_header "Uploading to S3"
+if ! aws s3api head-bucket --bucket "$S3_BUCKET" 2>/dev/null; then
+  print_step "Creating S3 bucket: $S3_BUCKET"
+  if [ "$REGION" = "us-east-1" ]; then
+    aws s3api create-bucket --bucket "$S3_BUCKET" --region "$REGION"
+  else
+    aws s3api create-bucket --bucket "$S3_BUCKET" --region "$REGION" \
+      --create-bucket-configuration LocationConstraint="$REGION"
+  fi
+  aws s3api put-bucket-versioning --bucket "$S3_BUCKET" \
+    --versioning-configuration Status=Enabled
+  aws s3api put-bucket-encryption --bucket "$S3_BUCKET" \
+    --server-side-encryption-configuration \
+    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+  aws s3api put-public-access-block --bucket "$S3_BUCKET" \
+    --public-access-block-configuration \
+    'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true'
+fi
+
+print_step "Uploading backup archive to S3"
+aws s3 cp "$ARCHIVE_PATH" "s3://${S3_BUCKET}/"
+
+print_header "Cleaning up old local backups (keeping last 7 days)"
+find /finflow-backups -maxdepth 1 -type d -name "????-??-??" -mtime +7 -exec rm -rf {} + 2>/dev/null || true
 
 print_header "Backup complete"
 echo -e "${GREEN}Backup completed successfully!${NC}"
-echo "Backup archive: /finflow-backups/finflow-backup-$(date +%Y-%m-%d).tar.gz"
-echo "S3 location: s3://$S3_BUCKET/finflow-backup-$(date +%Y-%m-%d).tar.gz"
+echo "Local archive : $ARCHIVE_PATH"
+echo "S3 location   : s3://${S3_BUCKET}/${ARCHIVE_NAME}"

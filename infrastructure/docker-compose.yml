@@ -1,0 +1,371 @@
+version: "3.9"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks:
+    - finflow-net
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 15s
+
+services:
+  # ── Databases ──────────────────────────────────────────────────────────────
+  auth-db:
+    <<: *service-defaults
+    image: postgres:14-alpine
+    container_name: finflow-auth-db
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth"]
+
+  payments-db:
+    <<: *service-defaults
+    image: postgres:14-alpine
+    container_name: finflow-payments-db
+    environment:
+      POSTGRES_DB: payments
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PAYMENTS_DB_PASSWORD:?PAYMENTS_DB_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - payments-db-data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payments"]
+
+  accounting-db:
+    <<: *service-defaults
+    image: postgres:14-alpine
+    container_name: finflow-accounting-db
+    environment:
+      POSTGRES_DB: accounting
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${ACCOUNTING_DB_PASSWORD:?ACCOUNTING_DB_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - accounting-db-data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U postgres -d accounting"]
+
+  analytics-db:
+    <<: *service-defaults
+    image: postgres:14-alpine
+    container_name: finflow-analytics-db
+    environment:
+      POSTGRES_DB: analytics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD:?ANALYTICS_DB_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - analytics-db-data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U postgres -d analytics"]
+
+  # ── Messaging ──────────────────────────────────────────────────────────────
+  zookeeper:
+    <<: *service-defaults
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: finflow-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+
+  kafka:
+    <<: *service-defaults
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: finflow-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_RETENTION_HOURS: "168"
+    ports:
+      - "29092:29092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          "kafka-broker-api-versions --bootstrap-server localhost:9092",
+        ]
+      start_period: 30s
+
+  # ── Backend Services ───────────────────────────────────────────────────────
+  auth-service:
+    <<: *service-defaults
+    build:
+      context: ../services/auth-service
+      dockerfile: ../../infrastructure/docker/auth-service/Dockerfile
+    image: finflow/auth-service:${TAG:-local}
+    container_name: finflow-auth-service
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:${AUTH_DB_PASSWORD}@auth-db:5432/auth
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      KAFKA_BROKERS: kafka:9092
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        ["CMD-SHELL", "wget -q --spider http://localhost:3001/health || exit 1"]
+
+  payments-service:
+    <<: *service-defaults
+    build:
+      context: ../services/payments-service
+      dockerfile: ../../infrastructure/docker/payments-service/Dockerfile
+    image: finflow/payments-service:${TAG:-local}
+    container_name: finflow-payments-service
+    depends_on:
+      payments-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: postgresql://postgres:${PAYMENTS_DB_PASSWORD}@payments-db:5432/payments
+      JWT_SECRET: ${JWT_SECRET}
+      STRIPE_SECRET: ${STRIPE_SECRET:?STRIPE_SECRET is required}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?STRIPE_WEBHOOK_SECRET is required}
+      KAFKA_BROKERS: kafka:9092
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        ["CMD-SHELL", "wget -q --spider http://localhost:3002/health || exit 1"]
+
+  accounting-service:
+    <<: *service-defaults
+    build:
+      context: ../services/accounting-service
+      dockerfile: ../../infrastructure/docker/accounting-service/Dockerfile
+    image: finflow/accounting-service:${TAG:-local}
+    container_name: finflow-accounting-service
+    depends_on:
+      accounting-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      DATABASE_URL: postgresql://postgres:${ACCOUNTING_DB_PASSWORD}@accounting-db:5432/accounting
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_BROKERS: kafka:9092
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        ["CMD-SHELL", "wget -q --spider http://localhost:3003/health || exit 1"]
+
+  analytics-service:
+    <<: *service-defaults
+    build:
+      context: ../services/analytics-service
+      dockerfile: ../../infrastructure/docker/analytics-service/Dockerfile
+    image: finflow/analytics-service:${TAG:-local}
+    container_name: finflow-analytics-service
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      DATABASE_URL: postgresql://postgres:${ANALYTICS_DB_PASSWORD}@analytics-db:5432/analytics
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_BROKERS: kafka:9092
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        ["CMD-SHELL", "wget -q --spider http://localhost:3004/health || exit 1"]
+
+  credit-engine:
+    <<: *service-defaults
+    build:
+      context: ../services/credit-engine
+      dockerfile: ../../infrastructure/docker/credit-engine/Dockerfile
+    image: finflow/credit-engine:${TAG:-local}
+    container_name: finflow-credit-engine
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PORT: 8001
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_BROKERS: kafka:9092
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+
+  # ── API Gateway ────────────────────────────────────────────────────────────
+  api-gateway:
+    <<: *service-defaults
+    build:
+      context: ../services/api-gateway
+      dockerfile: ../../infrastructure/docker/api-gateway/Dockerfile
+    image: finflow/api-gateway:${TAG:-local}
+    container_name: finflow-api-gateway
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      payments-service:
+        condition: service_healthy
+      accounting-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+      credit-engine:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 8001
+      AUTH_SERVICE_URL: http://auth-service:3001
+      PAYMENTS_SERVICE_URL: http://payments-service:3002
+      ACCOUNTING_SERVICE_URL: http://accounting-service:3003
+      ANALYTICS_SERVICE_URL: http://analytics-service:3004
+      CREDIT_SERVICE_URL: http://credit-engine:8001
+    ports:
+      - "8000:8000"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        ["CMD-SHELL", "wget -q --spider http://localhost:8000/health || exit 1"]
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    <<: *service-defaults
+    build:
+      context: ../services/frontend
+      dockerfile: ../../infrastructure/docker/frontend/Dockerfile
+    image: finflow/frontend:${TAG:-local}
+    container_name: finflow-frontend
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
+
+  # ── Monitoring ─────────────────────────────────────────────────────────────
+  prometheus:
+    <<: *service-defaults
+    image: prom/prometheus:v2.48.0
+    container_name: finflow-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules.yml:/etc/prometheus/rules/rules.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://localhost:9090/-/healthy || exit 1",
+        ]
+
+  grafana:
+    <<: *service-defaults
+    image: grafana/grafana:10.2.0
+    container_name: finflow-grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://localhost:3000/api/health || exit 1",
+        ]
+
+  alertmanager:
+    <<: *service-defaults
+    image: prom/alertmanager:v0.26.0
+    container_name: finflow-alertmanager
+    volumes:
+      - ./monitoring/kubernetes/alertmanager.yaml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "9093:9093"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://localhost:9093/-/healthy || exit 1",
+        ]
+
+networks:
+  finflow-net:
+    driver: bridge
+    name: finflow-network
+
+volumes:
+  auth-db-data:
+  payments-db-data:
+  accounting-db-data:
+  analytics-db-data:
+  zookeeper-data:
+  zookeeper-log:
+  kafka-data:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:
