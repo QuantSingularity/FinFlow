@@ -2,7 +2,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
@@ -76,6 +76,7 @@ class TestTransactionCache(unittest.TestCase):
 
     def test_redis_error_handling(self):
         from redis.exceptions import RedisError
+
         self.mock_redis.get.side_effect = RedisError("Redis connection error")
         result = self.cache.get_transaction("tx-12345")
         self.mock_redis.get.assert_called_once()
@@ -106,7 +107,9 @@ class TestCacheManager(unittest.TestCase):
         result = self.cache_manager.get_transaction("tx-12345")
         self.mock_primary.get_transaction.assert_called_once_with("tx-12345")
         self.mock_fallback.get_transaction.assert_called_once_with("tx-12345")
-        self.mock_primary.set_transaction.assert_called_once_with("tx-12345", self.transaction_data)
+        self.mock_primary.set_transaction.assert_called_once_with(
+            "tx-12345", self.transaction_data
+        )
         self.assertEqual(result, self.transaction_data)
 
     def test_get_transaction_both_miss(self):
@@ -121,8 +124,12 @@ class TestCacheManager(unittest.TestCase):
 
     def test_set_transaction(self):
         self.cache_manager.set_transaction("tx-12345", self.transaction_data)
-        self.mock_primary.set_transaction.assert_called_once_with("tx-12345", self.transaction_data)
-        self.mock_fallback.set_transaction.assert_called_once_with("tx-12345", self.transaction_data)
+        self.mock_primary.set_transaction.assert_called_once_with(
+            "tx-12345", self.transaction_data
+        )
+        self.mock_fallback.set_transaction.assert_called_once_with(
+            "tx-12345", self.transaction_data
+        )
 
     def test_invalidate_transaction(self):
         self.cache_manager.invalidate_transaction("tx-12345")

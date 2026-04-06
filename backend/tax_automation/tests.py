@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 import unittest
@@ -5,7 +6,6 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-import logging
 logger = logging.getLogger(__name__)
 
 try:
@@ -13,7 +13,6 @@ try:
         ComplianceCheckType,
         ComplianceStatus,
         InternationalComplianceManager,
-        RiskLevel,
     )
     from tax_automation.tax_calculation_engine import (
         CalculationMethod,
@@ -28,7 +27,6 @@ except ImportError:
         ComplianceCheckType,
         ComplianceStatus,
         InternationalComplianceManager,
-        RiskLevel,
     )
     from tax_calculation_engine import (
         CalculationMethod,
@@ -293,8 +291,10 @@ class TestInternationalCompliance(unittest.TestCase):
             ],
         }
         self.compliance_manager.create_entity_profile(profile_data)
-        comprehensive_result = self.compliance_manager.perform_comprehensive_compliance_check(
-            "test_entity_005"
+        comprehensive_result = (
+            self.compliance_manager.perform_comprehensive_compliance_check(
+                "test_entity_005"
+            )
         )
         self.assertIsInstance(comprehensive_result, dict)
         self.assertIn("kyc", comprehensive_result)

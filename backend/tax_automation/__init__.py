@@ -21,7 +21,11 @@ from tax_automation.tax_calculation_engine import (
     TaxType,
     Transaction,
 )
-from tax_automation.tax_rule_management import SAMPLE_TAX_RULES, TaxRuleDatabase, TaxRuleManager
+from tax_automation.tax_rule_management import (
+    SAMPLE_TAX_RULES,
+    TaxRuleDatabase,
+    TaxRuleManager,
+)
 
 __version__ = "1.0.0"
 __author__ = "FinFlow Team"

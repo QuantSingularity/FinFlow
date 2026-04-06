@@ -89,8 +89,7 @@ class TestTransactionDatabase(unittest.TestCase):
         self.db.Session = MagicMock(return_value=mock_session)
 
         batch = [
-            {**self.transaction_data, "transaction_id": f"tx-{i}"}
-            for i in range(3)
+            {**self.transaction_data, "transaction_id": f"tx-{i}"} for i in range(3)
         ]
         results = self.db.create_transaction_batch(batch)
 

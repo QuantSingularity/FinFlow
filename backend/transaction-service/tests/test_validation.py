@@ -1,7 +1,6 @@
 import os
 import sys
 import unittest
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
@@ -51,10 +50,18 @@ class TestTransactionValidator(unittest.TestCase):
         with patch.object(self.validator, "_validate_amount") as mock_validate:
             mock_validate.return_value = (
                 False,
-                [{"code": "INVALID_AMOUNT", "message": "Amount must be positive", "field": "amount"}],
+                [
+                    {
+                        "code": "INVALID_AMOUNT",
+                        "message": "Amount must be positive",
+                        "field": "amount",
+                    }
+                ],
                 [],
             )
-            result = self.validator.validate_transaction(self.valid_transaction, CONTEXT)
+            result = self.validator.validate_transaction(
+                self.valid_transaction, CONTEXT
+            )
             self.assertFalse(result.is_valid)
             self.assertFalse(result.validation_checks.get("amount_valid", True))
             self.assertTrue(any(e.code == "INVALID_AMOUNT" for e in result.errors))
@@ -66,13 +73,23 @@ class TestTransactionValidator(unittest.TestCase):
         self.assertGreater(result.risk_score, 0.0)
 
     def test_validate_transaction_velocity(self):
-        with patch.object(self.validator, "_validate_transaction_velocity") as mock_velocity:
+        with patch.object(
+            self.validator, "_validate_transaction_velocity"
+        ) as mock_velocity:
             mock_velocity.return_value = (
                 False,
-                [{"code": "VELOCITY_EXCEEDED", "message": "Transaction frequency exceeds limits", "field": "transaction_id"}],
+                [
+                    {
+                        "code": "VELOCITY_EXCEEDED",
+                        "message": "Transaction frequency exceeds limits",
+                        "field": "transaction_id",
+                    }
+                ],
                 [],
             )
-            result = self.validator.validate_transaction(self.valid_transaction, CONTEXT)
+            result = self.validator.validate_transaction(
+                self.valid_transaction, CONTEXT
+            )
             self.assertFalse(result.is_valid)
             self.assertTrue(any(e.code == "VELOCITY_EXCEEDED" for e in result.errors))
 
@@ -101,12 +118,14 @@ class TestBatchTransactionValidator(unittest.TestCase):
         self.context = {"user_id": "user-123"}
 
     def test_validate_batch(self):
-        self.mock_validator.validate_transaction.side_effect = lambda tx, ctx: MagicMock(
-            is_valid=True,
-            risk_score=0.2,
-            risk_level=RiskLevel.LOW,
-            validation_checks={"basic_fields_valid": True},
-            errors=[],
+        self.mock_validator.validate_transaction.side_effect = (
+            lambda tx, ctx: MagicMock(
+                is_valid=True,
+                risk_score=0.2,
+                risk_level=RiskLevel.LOW,
+                validation_checks={"basic_fields_valid": True},
+                errors=[],
+            )
         )
         results = self.batch_validator.validate_batch(self.transactions, self.context)
         self.assertEqual(len(results), 3)
@@ -119,12 +138,16 @@ class TestBatchTransactionValidator(unittest.TestCase):
         def side_effect(tx, ctx):
             if tx.transaction_id == "tx-1":
                 return MagicMock(
-                    is_valid=False, risk_score=0.7, risk_level=RiskLevel.HIGH,
+                    is_valid=False,
+                    risk_score=0.7,
+                    risk_level=RiskLevel.HIGH,
                     validation_checks={"amount_valid": False},
                     errors=[MagicMock(code="INVALID_AMOUNT")],
                 )
             return MagicMock(
-                is_valid=True, risk_score=0.2, risk_level=RiskLevel.LOW,
+                is_valid=True,
+                risk_score=0.2,
+                risk_level=RiskLevel.LOW,
                 validation_checks={"basic_fields_valid": True},
                 errors=[],
             )
