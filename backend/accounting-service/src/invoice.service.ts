@@ -1,11 +1,11 @@
-import invoiceModel from "../models/invoice.model";
+import invoiceModel from "./models/invoice.model";
 import {
   InvoiceCreateInput,
   InvoiceUpdateInput,
   Invoice,
-} from "../types/invoice.types";
-import { sendMessage } from "../config/kafka";
-import { logger } from "../utils/logger";
+} from "./invoice.types";
+import { sendMessage } from "../../common/kafka";
+import { logger } from "../../common/logger";
 import { InvoiceStatus } from "@prisma/client";
 
 class InvoiceService {

@@ -2,9 +2,6 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.logging import get_logger
-
-logger = get_logger(__name__)
 from models import (
     RiskLevel,
     TransactionRequest,
@@ -16,6 +13,7 @@ from models import (
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+logger = logging.getLogger(__name__)
 
 
 class TransactionValidator:

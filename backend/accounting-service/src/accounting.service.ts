@@ -1,13 +1,10 @@
 import journalEntryModel from "./journal-entry.model";
 import ledgerEntryModel from "./ledger-entry.model";
 import accountModel from "./account.model";
-import {
-  JournalEntryCreateInput,
-  JournalEntry,
-} from "./types/journal-entry.types";
+import { JournalEntryCreateInput, JournalEntry } from "./journal-entry.types";
 import { LedgerEntryCreateInput } from "./types/ledger-entry.types";
-import { sendMessage } from "../config/kafka";
-import { logger } from "../utils/logger";
+import { sendMessage } from "../../common/kafka";
+import { logger } from "../../common/logger";
 
 class AccountingService {
   /**
@@ -464,6 +461,34 @@ class AccountingService {
     } catch (error) {
       logger.error(`Error publishing accounting event: ${error}`);
       // Don't throw error, just log it
+    }
+  }
+
+  async getAllJournalEntries(): Promise<any[]> {
+    try {
+      return await journalEntryModel.findAll();
+    } catch (error) {
+      logger.error("Error getting all journal entries: " + error);
+      throw error;
+    }
+  }
+
+  async getAccountBalance(
+    accountId: string,
+    asOfDate: Date = new Date(),
+  ): Promise<any> {
+    try {
+      const account = await accountModel.findById(accountId);
+      if (!account) return null;
+      const ledgerSummary = await ledgerEntryModel.getAccountBalanceByDate(
+        accountId,
+        asOfDate,
+      );
+      const balance = ledgerSummary.totalDebit - ledgerSummary.totalCredit;
+      return { accountId, account, balance, ledgerSummary, asOfDate };
+    } catch (error) {
+      logger.error("Error getting account balance: " + error);
+      throw error;
     }
   }
 }

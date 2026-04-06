@@ -193,6 +193,36 @@ export class SquareProcessor implements PaymentProcessorInterface {
         process.env.NODE_ENV === "production" ? "production" : "sandbox",
     };
   }
+
+  validatePaymentDetails(paymentDetails: any): boolean {
+    if (!paymentDetails || paymentDetails.amount <= 0) return false;
+    if (!paymentDetails.source && !paymentDetails.token) return false;
+    return true;
+  }
+
+  async processPayment(paymentDetails: any): Promise<any> {
+    const { amount, currency = "usd", source, metadata = {} } = paymentDetails;
+    return this.createCharge(
+      Math.round(amount * 100),
+      currency,
+      source,
+      metadata,
+    );
+  }
+
+  async refundPayment(refundDetails: any): Promise<any> {
+    const { processorPaymentId, amount, reason } = refundDetails;
+    return this.createRefund(
+      processorPaymentId,
+      amount ? Math.round(amount * 100) : undefined,
+      reason,
+    );
+  }
+
+  async getPaymentStatus(processorPaymentId: string): Promise<any> {
+    const charge = await this.retrieveCharge(processorPaymentId);
+    return { status: charge.status || charge.state, updatedAt: new Date() };
+  }
 }
 
 export default new SquareProcessor();

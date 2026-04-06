@@ -5,9 +5,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from core.logging import get_logger
+import logging
+logger = logging.getLogger(__name__)
 
-logger = get_logger(__name__)
 try:
     from tax_automation.international_compliance import (
         ComplianceCheckType,
@@ -24,9 +24,20 @@ try:
     )
     from tax_automation.tax_rule_management import TaxRuleManager
 except ImportError:
-    logger.info(
-        "Warning: Could not import from 'tax_automation' package. Assuming local files."
+    from international_compliance import (
+        ComplianceCheckType,
+        ComplianceStatus,
+        InternationalComplianceManager,
+        RiskLevel,
     )
+    from tax_calculation_engine import (
+        CalculationMethod,
+        TaxRule,
+        TaxType,
+        Transaction,
+        create_sample_data,
+    )
+    from tax_rule_management import TaxRuleManager
 
 
 class TestTaxCalculationEngine(unittest.TestCase):
@@ -282,13 +293,14 @@ class TestInternationalCompliance(unittest.TestCase):
             ],
         }
         self.compliance_manager.create_entity_profile(profile_data)
-        comprehensive_result = self.compliance_manager.perform_comprehensive_check(
+        comprehensive_result = self.compliance_manager.perform_comprehensive_compliance_check(
             "test_entity_005"
         )
-        self.assertEqual(comprehensive_result.entity_id, "test_entity_005")
-        self.assertIsInstance(comprehensive_result.risk_level, RiskLevel)
-        self.assertIsInstance(comprehensive_result.compliance_checks, list)
-        self.assertGreater(len(comprehensive_result.compliance_checks), 0)
+        self.assertIsInstance(comprehensive_result, dict)
+        self.assertIn("kyc", comprehensive_result)
+        self.assertIn("fatca", comprehensive_result)
+        kyc_check = comprehensive_result["kyc"]
+        self.assertEqual(kyc_check.entity_id, "test_entity_005")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import invoiceService from "../services/invoice.service";
-import { InvoiceCreateInput, InvoiceUpdateInput } from "../types/invoice.types";
+import invoiceService from "./invoice.service";
+import { InvoiceCreateInput, InvoiceUpdateInput } from "./invoice.types";
 
 class InvoiceController {
   // Create a new invoice

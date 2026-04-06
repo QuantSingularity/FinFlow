@@ -1,11 +1,11 @@
-import journalEntryModel from "../models/journal-entry.model";
+import journalEntryModel from "./models/journal-entry.model";
 import {
   JournalEntryCreateInput,
   JournalEntryUpdateInput,
   JournalEntry,
-} from "../types/journal-entry.types";
-import { sendMessage } from "../config/kafka";
-import { logger } from "../utils/logger";
+} from "./journal-entry.types";
+import { sendMessage } from "../../common/kafka";
+import { logger } from "../../common/logger";
 
 class JournalEntryService {
   // Find journal entry by ID

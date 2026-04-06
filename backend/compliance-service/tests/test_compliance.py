@@ -1,5 +1,9 @@
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
+
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
@@ -133,6 +137,4 @@ class TestComplianceService(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    from datetime import timedelta
-
     unittest.main()

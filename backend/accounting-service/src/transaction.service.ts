@@ -1,11 +1,11 @@
-import transactionModel from "../models/transaction.model";
+import transactionModel from "./models/transaction.model";
 import {
   TransactionCreateInput,
   TransactionUpdateInput,
   Transaction,
-} from "../types/transaction.types";
-import { sendMessage } from "../config/kafka";
-import { logger } from "../utils/logger";
+} from "./transaction.types";
+import { sendMessage } from "../../common/kafka";
+import { logger } from "../../common/logger";
 import categoryService from "./category.service";
 
 class TransactionService {

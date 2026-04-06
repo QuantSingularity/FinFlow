@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import forecastService from "../services/forecast.service";
-import { ForecastRequest } from "../types/forecast.types";
+import forecastService from "./forecast.service";
+import { ForecastRequest } from "./forecast.types";
 
 class ForecastController {
   // Generate forecast for a user

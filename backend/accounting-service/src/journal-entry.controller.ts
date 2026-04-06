@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
-import journalEntryService from "../services/journal-entry.service";
+import journalEntryService from "./journal-entry.service";
 import {
   JournalEntryCreateInput,
   JournalEntryUpdateInput,
-} from "../types/journal-entry.types";
+} from "./journal-entry.types";
 
 class JournalEntryController {
   // Create a new journal entry

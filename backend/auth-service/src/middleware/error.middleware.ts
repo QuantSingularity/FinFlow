@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import logger from "../../../../common/logger";
-import { HttpError } from "../../../../common/errors";
+import logger from "../../../common/logger";
+import { HttpError } from "../../../common/errors";
 
 const errorMiddleware = (
   error: any,

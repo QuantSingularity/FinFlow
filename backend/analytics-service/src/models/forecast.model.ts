@@ -3,7 +3,7 @@ import {
   Forecast,
   ForecastCreateInput,
   ForecastUpdateInput,
-} from "../types/forecast.types";
+} from "../forecast.types";
 
 class ForecastModel {
   private prisma: PrismaClient;

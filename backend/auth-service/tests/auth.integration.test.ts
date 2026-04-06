@@ -19,6 +19,9 @@ jest.mock("../src/auth.service");
 jest.mock("../src/user.service");
 jest.mock("jsonwebtoken");
 jest.mock("../src/utils/audit.utils");
+jest.mock("../../common/kafka", () => ({
+  sendMessage: jest.fn().mockResolvedValue(undefined),
+}));
 
 describe("Auth API Integration Tests", () => {
   beforeEach(() => {

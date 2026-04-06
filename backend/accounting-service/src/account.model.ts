@@ -3,7 +3,7 @@ import {
   Account,
   AccountCreateInput,
   AccountUpdateInput,
-} from "../types/account.types";
+} from "./types/account.types";
 
 class AccountModel {
   private prisma: PrismaClient;

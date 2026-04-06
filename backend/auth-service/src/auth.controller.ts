@@ -1,15 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import config from "../../../common/config";
-import jwt from "jsonwebtoken";
-import userModel from "./models/user.model";
-import { sendMessage } from "../../../common/kafka";
 import authService from "./auth.service";
-import {
-  LoginDTO,
-  RegisterDTO,
-  RefreshTokenDTO,
-  TokenPayload,
-} from "./auth.types";
+import { LoginDTO, RegisterDTO, RefreshTokenDTO } from "./auth.types";
 
 class AuthController {
   async register(
@@ -18,21 +9,8 @@ class AuthController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const registerDto: RegisterDTO = {
-        ...req.body,
-        ipAddress: req.ip,
-      };
-
-      const existingUser = await userModel.findByEmail(registerDto.email);
-      if (existingUser) {
-        res
-          .status(409)
-          .json({ message: "User already exists with this email" });
-        return;
-      }
-
+      const registerDto: RegisterDTO = { ...req.body, ipAddress: req.ip };
       const result = await authService.register(registerDto);
-
       res.status(201).json({
         id: result.id,
         email: result.email,
@@ -47,13 +25,8 @@ class AuthController {
 
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const loginDto: LoginDTO = {
-        ...req.body,
-        ipAddress: req.ip,
-      };
-
+      const loginDto: LoginDTO = { ...req.body, ipAddress: req.ip };
       const result = await authService.login(loginDto);
-
       res.status(200).json({
         id: result.id,
         email: result.email,
@@ -69,17 +42,11 @@ class AuthController {
   async me(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = (req as any).user;
-
       if (!user) {
         res.status(401).json({ message: "Unauthorized" });
         return;
       }
-
-      res.status(200).json({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      });
+      res.status(200).json({ id: user.id, email: user.email, role: user.role });
     } catch (error) {
       next(error);
     }
@@ -92,21 +59,18 @@ class AuthController {
   ): Promise<void> {
     try {
       const { refreshToken }: RefreshTokenDTO = req.body;
-
       if (!refreshToken) {
         res.status(400).json({ message: "Refresh token is required" });
         return;
       }
-
       const tokens = await authService.refreshToken({
         refreshToken,
         ipAddress: req.ip,
       });
-
       res.status(200).json(tokens);
-    } catch (error) {
-      if ((error as any).name === "UnauthorizedError") {
-        res.status(401).json({ message: (error as Error).message });
+    } catch (error: any) {
+      if (error.name === "UnauthorizedError") {
+        res.status(401).json({ message: error.message });
         return;
       }
       next(error);
@@ -116,12 +80,10 @@ class AuthController {
   async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = (req as any).user;
-
       if (!user) {
         res.status(401).json({ message: "Unauthorized" });
         return;
       }
-
       await authService.logout(user.id, req.ip);
       res.status(200).json({ message: "Logged out successfully" });
     } catch (error) {
@@ -136,12 +98,10 @@ class AuthController {
   ): Promise<void> {
     try {
       const user = (req as any).user;
-
       if (!user) {
         res.status(401).json({ message: "Unauthorized" });
         return;
       }
-
       const { currentPassword, newPassword } = req.body;
       await authService.changePassword(
         user.id,
@@ -149,8 +109,29 @@ class AuthController {
         newPassword,
         req.ip,
       );
-
       res.status(200).json({ message: "Password changed successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async oauthCallback(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const result = await authService.oauthLogin({
+        ...req.body,
+        ipAddress: req.ip,
+      });
+      res.status(200).json({
+        id: result.id,
+        email: result.email,
+        role: result.role,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      });
     } catch (error) {
       next(error);
     }

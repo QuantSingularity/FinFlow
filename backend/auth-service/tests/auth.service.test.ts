@@ -12,7 +12,7 @@ jest.mock("../src/user.service");
 jest.mock("jsonwebtoken");
 jest.mock("../src/utils/password.utils");
 jest.mock("../src/utils/audit.utils");
-jest.mock("../config/kafka", () => ({
+jest.mock("../../common/kafka", () => ({
   sendMessage: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("axios");

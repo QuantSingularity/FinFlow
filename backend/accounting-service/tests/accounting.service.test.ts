@@ -12,6 +12,9 @@ jest.mock("../src/ledger-entry.model");
 jest.mock("../src/account.model");
 jest.mock("../src/analytics.service");
 jest.mock("../../common/logger");
+jest.mock("../../common/kafka", () => ({
+  sendMessage: jest.fn().mockResolvedValue(undefined),
+}));
 
 describe("AccountingService", () => {
   beforeEach(() => {

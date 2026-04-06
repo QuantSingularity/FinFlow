@@ -1,4 +1,4 @@
-import logger from "../../../common/logger";
+import logger from "../../common/logger";
 import transactionModel from "./models/transaction.model";
 import forecastModel from "./models/forecast.model";
 import { ForecastCreateInput } from "./forecast.types";

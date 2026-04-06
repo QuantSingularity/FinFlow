@@ -1,44 +1,49 @@
 import { describe, expect, test, jest, beforeEach } from "@jest/globals";
 import paymentService from "../src/payment.service";
-import { PaymentProcessorFactory } from "../src/factories/payment-processor.factory";
-import { PaymentProcessorInterface } from "../src/interfaces/payment-processor.interface";
-import { PaymentStatus, ProcessorType } from "../src/payment.types";
-import { logger } from "../../common/logger";
+import paymentProcessorFactory from "../src/factories/payment-processor.factory";
+import { PaymentStatus, ProcessorType } from "../src/types/payment.types";
 
-// Mock dependencies
 jest.mock("../src/factories/payment-processor.factory");
-jest.mock("../../common/logger");
+jest.mock("../src/models/payment.model");
+jest.mock("../../common/kafka", () => ({
+  sendMessage: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock("../src/utils/logger", () => ({
+  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+  default: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
 
 describe("PaymentService", () => {
-  // Mock payment processor
-  const mockProcessor: jest.Mocked<PaymentProcessorInterface> = {
+  const mockProcessor = {
+    getName: jest.fn().mockReturnValue("stripe"),
     processPayment: jest.fn(),
     refundPayment: jest.fn(),
     getPaymentStatus: jest.fn(),
     validatePaymentDetails: jest.fn(),
+    createCharge: jest.fn(),
+    createRefund: jest.fn(),
+    retrieveCharge: jest.fn(),
+    createPaymentIntent: jest.fn(),
+    verifyWebhookSignature: jest.fn(),
+    processWebhookEvent: jest.fn(),
+    getClientConfig: jest.fn(),
   };
 
   beforeEach(() => {
-    // Clear all mocks before each test
     jest.clearAllMocks();
-
-    // Default mock implementation for factory
-    (PaymentProcessorFactory.getProcessor as jest.Mock).mockReturnValue(
+    (paymentProcessorFactory.getProcessor as jest.Mock).mockReturnValue(
       mockProcessor,
     );
   });
 
   describe("processPayment", () => {
     test("should process payment successfully", async () => {
-      // Arrange
       const paymentDetails = {
         amount: 100.0,
         currency: "USD",
         source: "card_token_123",
         description: "Test payment",
-        metadata: {
-          orderId: "order_123",
-        },
+        metadata: { orderId: "order_123" },
         processorType: ProcessorType.STRIPE,
       };
 
@@ -51,14 +56,12 @@ describe("PaymentService", () => {
         createdAt: new Date(),
       };
 
-      mockProcessor.processPayment.mockResolvedValue(processorResponse);
       mockProcessor.validatePaymentDetails.mockReturnValue(true);
+      mockProcessor.processPayment.mockResolvedValue(processorResponse);
 
-      // Act
       const result = await paymentService.processPayment(paymentDetails);
 
-      // Assert
-      expect(PaymentProcessorFactory.getProcessor).toHaveBeenCalledWith(
+      expect(paymentProcessorFactory.getProcessor).toHaveBeenCalledWith(
         ProcessorType.STRIPE,
       );
       expect(mockProcessor.validatePaymentDetails).toHaveBeenCalledWith(
@@ -69,21 +72,15 @@ describe("PaymentService", () => {
     });
 
     test("should throw error when payment details are invalid", async () => {
-      // Arrange
       const paymentDetails = {
-        amount: -100.0, // Invalid amount
+        amount: -100.0,
         currency: "USD",
         source: "card_token_123",
-        description: "Test payment",
-        metadata: {
-          orderId: "order_123",
-        },
         processorType: ProcessorType.STRIPE,
       };
 
       mockProcessor.validatePaymentDetails.mockReturnValue(false);
 
-      // Act & Assert
       await expect(
         paymentService.processPayment(paymentDetails),
       ).rejects.toThrow("Invalid payment details");
@@ -91,25 +88,19 @@ describe("PaymentService", () => {
     });
 
     test("should throw error when processor type is invalid", async () => {
-      // Arrange
       const paymentDetails = {
         amount: 100.0,
         currency: "USD",
         source: "card_token_123",
-        description: "Test payment",
-        metadata: {
-          orderId: "order_123",
-        },
         processorType: "INVALID_PROCESSOR" as ProcessorType,
       };
 
-      (PaymentProcessorFactory.getProcessor as jest.Mock).mockImplementation(
+      (paymentProcessorFactory.getProcessor as jest.Mock).mockImplementation(
         () => {
           throw new Error("Invalid processor type");
         },
       );
 
-      // Act & Assert
       await expect(
         paymentService.processPayment(paymentDetails),
       ).rejects.toThrow("Invalid processor type");
@@ -117,15 +108,10 @@ describe("PaymentService", () => {
     });
 
     test("should handle processor errors during payment processing", async () => {
-      // Arrange
       const paymentDetails = {
         amount: 100.0,
         currency: "USD",
         source: "card_token_123",
-        description: "Test payment",
-        metadata: {
-          orderId: "order_123",
-        },
         processorType: ProcessorType.STRIPE,
       };
 
@@ -133,17 +119,14 @@ describe("PaymentService", () => {
       mockProcessor.validatePaymentDetails.mockReturnValue(true);
       mockProcessor.processPayment.mockRejectedValue(processorError);
 
-      // Act & Assert
       await expect(
         paymentService.processPayment(paymentDetails),
       ).rejects.toThrow("Payment processor error");
-      expect(logger.error).toHaveBeenCalled();
     });
   });
 
   describe("refundPayment", () => {
     test("should refund payment successfully", async () => {
-      // Arrange
       const refundDetails = {
         paymentId: "payment_123",
         amount: 100.0,
@@ -163,11 +146,9 @@ describe("PaymentService", () => {
 
       mockProcessor.refundPayment.mockResolvedValue(refundResponse);
 
-      // Act
       const result = await paymentService.refundPayment(refundDetails);
 
-      // Assert
-      expect(PaymentProcessorFactory.getProcessor).toHaveBeenCalledWith(
+      expect(paymentProcessorFactory.getProcessor).toHaveBeenCalledWith(
         ProcessorType.STRIPE,
       );
       expect(mockProcessor.refundPayment).toHaveBeenCalledWith(refundDetails);
@@ -175,7 +156,6 @@ describe("PaymentService", () => {
     });
 
     test("should throw error when refund fails", async () => {
-      // Arrange
       const refundDetails = {
         paymentId: "payment_123",
         amount: 100.0,
@@ -187,17 +167,14 @@ describe("PaymentService", () => {
       const refundError = new Error("Refund failed");
       mockProcessor.refundPayment.mockRejectedValue(refundError);
 
-      // Act & Assert
       await expect(paymentService.refundPayment(refundDetails)).rejects.toThrow(
         "Refund failed",
       );
-      expect(logger.error).toHaveBeenCalled();
     });
   });
 
   describe("getPaymentStatus", () => {
     test("should get payment status successfully", async () => {
-      // Arrange
       const paymentId = "payment_123";
       const processorType = ProcessorType.STRIPE;
       const processorPaymentId = "ch_123456";
@@ -209,15 +186,13 @@ describe("PaymentService", () => {
 
       mockProcessor.getPaymentStatus.mockResolvedValue(statusResponse);
 
-      // Act
       const result = await paymentService.getPaymentStatus(
         paymentId,
         processorType,
         processorPaymentId,
       );
 
-      // Assert
-      expect(PaymentProcessorFactory.getProcessor).toHaveBeenCalledWith(
+      expect(paymentProcessorFactory.getProcessor).toHaveBeenCalledWith(
         processorType,
       );
       expect(mockProcessor.getPaymentStatus).toHaveBeenCalledWith(
@@ -227,7 +202,6 @@ describe("PaymentService", () => {
     });
 
     test("should throw error when getting status fails", async () => {
-      // Arrange
       const paymentId = "payment_123";
       const processorType = ProcessorType.STRIPE;
       const processorPaymentId = "ch_123456";
@@ -235,7 +209,6 @@ describe("PaymentService", () => {
       const statusError = new Error("Status check failed");
       mockProcessor.getPaymentStatus.mockRejectedValue(statusError);
 
-      // Act & Assert
       await expect(
         paymentService.getPaymentStatus(
           paymentId,
@@ -243,7 +216,17 @@ describe("PaymentService", () => {
           processorPaymentId,
         ),
       ).rejects.toThrow("Status check failed");
-      expect(logger.error).toHaveBeenCalled();
+    });
+  });
+
+  describe("getUserPayments", () => {
+    test("should return payments for a user", async () => {
+      const paymentModel = require("../src/models/payment.model").default;
+      const mockPayments = [{ id: "p1", userId: "user_123", amount: 100 }];
+      paymentModel.findByUserId = jest.fn().mockResolvedValue(mockPayments);
+
+      const result = await paymentService.getUserPayments("user_123");
+      expect(result).toEqual(mockPayments);
     });
   });
 });

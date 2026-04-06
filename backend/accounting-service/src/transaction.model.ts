@@ -3,7 +3,7 @@ import {
   Transaction,
   TransactionCreateInput,
   TransactionUpdateInput,
-} from "../types/transaction.types";
+} from "./transaction.types";
 
 class TransactionModel {
   private prisma: PrismaClient;

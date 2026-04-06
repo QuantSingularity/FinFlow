@@ -3,7 +3,7 @@ import {
   Category,
   CategoryCreateInput,
   CategoryUpdateInput,
-} from "../types/category.types";
+} from "../category.types";
 
 class CategoryModel {
   private prisma: PrismaClient;

@@ -16,6 +16,9 @@ import jwt from "jsonwebtoken";
 // Mock dependencies
 jest.mock("../src/analytics.service");
 jest.mock("../src/forecast.model");
+jest.mock("../../common/kafka", () => ({
+  sendMessage: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock("jsonwebtoken");
 
 describe("Analytics API Integration Tests", () => {

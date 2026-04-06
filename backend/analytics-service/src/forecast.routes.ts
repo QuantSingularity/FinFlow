@@ -1,24 +1,18 @@
 import express from "express";
-import forecastController from "../controllers/forecast.controller";
-import { authenticate } from "../middlewares/auth.middleware";
-import { validate } from "../middlewares/validation.middleware";
-import { createForecastRequestValidation } from "../validators/forecast.validator";
+import forecastController from "./forecast.controller";
 
 const router = express.Router();
 
-// Generate forecast
-router.post(
-  "/",
-  authenticate,
-  validate(createForecastRequestValidation),
-  forecastController.generateForecast.bind(forecastController),
-);
-
-// Get forecasts by user ID
+router.post("/", forecastController.createForecast.bind(forecastController));
+router.get("/:id", forecastController.getForecastById.bind(forecastController));
 router.get(
   "/",
-  authenticate,
   forecastController.getForecastsByUserId.bind(forecastController),
+);
+router.put("/:id", forecastController.updateForecast.bind(forecastController));
+router.delete(
+  "/:id",
+  forecastController.deleteForecast.bind(forecastController),
 );
 
 export default router;

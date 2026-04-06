@@ -4,7 +4,7 @@ import passport from "passport";
 import { Strategy as JwtStrategy, ExtractJwt } from "passport-jwt";
 import { Strategy as OAuth2Strategy } from "passport-oauth2";
 import { PrismaClient } from "@prisma/client";
-import { TokenPayload } from "../types/auth.types";
+import { TokenPayload } from "./passport.types";
 
 // Load environment variables
 dotenv.config();

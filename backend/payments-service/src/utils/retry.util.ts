@@ -1,4 +1,4 @@
-import { logger } from "../utils/logger";
+import { logger } from "./logger";
 
 /**
  * Utility for handling retries with exponential backoff

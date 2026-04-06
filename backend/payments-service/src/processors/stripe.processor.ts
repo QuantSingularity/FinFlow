@@ -136,6 +136,42 @@ export class StripeProcessor implements PaymentProcessorInterface {
       apiVersion: process.env.STRIPE_API_VERSION || "2023-10-16",
     };
   }
+
+  // FIX: these four methods were defined outside the class body (after its
+  // closing brace), making the file unparseable. Moved inside the class.
+
+  validatePaymentDetails(paymentDetails: any): boolean {
+    if (!paymentDetails || paymentDetails.amount <= 0) return false;
+    if (!paymentDetails.source && !paymentDetails.token) return false;
+    return true;
+  }
+
+  async processPayment(paymentDetails: any): Promise<any> {
+    const { amount, currency = "usd", source, metadata = {} } = paymentDetails;
+    return this.createCharge(
+      Math.round(amount * 100),
+      currency,
+      source,
+      metadata,
+    );
+  }
+
+  async refundPayment(refundDetails: any): Promise<any> {
+    const { processorPaymentId, amount, reason } = refundDetails;
+    return this.createRefund(
+      processorPaymentId,
+      amount ? Math.round(amount * 100) : undefined,
+      reason,
+    );
+  }
+
+  async getPaymentStatus(processorPaymentId: string): Promise<any> {
+    const charge = await this.retrieveCharge(processorPaymentId);
+    return {
+      status: charge.status,
+      updatedAt: new Date(charge.created * 1000),
+    };
+  }
 }
 
 export default new StripeProcessor();

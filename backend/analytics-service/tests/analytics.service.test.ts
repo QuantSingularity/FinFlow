@@ -6,6 +6,9 @@ import { logger } from "../../common/logger";
 
 // Mock dependencies
 jest.mock("../src/forecast.model");
+jest.mock("../../common/kafka", () => ({
+  sendMessage: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock("axios");
 jest.mock("../../common/logger");
 

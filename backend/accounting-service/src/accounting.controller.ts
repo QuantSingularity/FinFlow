@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import accountingService from "./accounting.service";
 import analyticsService from "./analytics.service";
-import { logger } from "../utils/logger";
+import { logger } from "../../common/logger";
 
 class AccountingController {
   /**

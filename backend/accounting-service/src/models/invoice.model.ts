@@ -3,7 +3,7 @@ import {
   Invoice,
   InvoiceCreateInput,
   InvoiceUpdateInput,
-} from "../types/invoice.types";
+} from "../invoice.types";
 
 class InvoiceModel {
   private prisma: PrismaClient;

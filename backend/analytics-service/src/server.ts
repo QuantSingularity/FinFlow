@@ -27,7 +27,7 @@ const server = app.listen(PORT, async () => {
   try {
     await initializeDatabase();
     await initializeKafka();
-    logger.info("analytics-service running on port ${PORT}");
+    logger.info(`analytics-service running on port ${PORT}`);
   } catch (error) {
     logger.error("Failed to initialize analytics-service:", error);
     process.exit(1);

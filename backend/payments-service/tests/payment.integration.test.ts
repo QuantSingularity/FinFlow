@@ -10,11 +10,14 @@ import {
 import request from "supertest";
 import app from "../src/app";
 import paymentService from "../src/payment.service";
-import { PaymentStatus, ProcessorType } from "../src/payment.types";
+import { PaymentStatus, ProcessorType } from "../src/types/payment.types";
 import jwt from "jsonwebtoken";
 
 // Mock dependencies
 jest.mock("../src/payment.service");
+jest.mock("../../common/kafka", () => ({
+  sendMessage: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock("jsonwebtoken");
 
 describe("Payments API Integration Tests", () => {

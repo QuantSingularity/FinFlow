@@ -11,9 +11,7 @@ for the Finflow financial platform, including:
 
 """
 
-from tax_api_service import app as tax_api_app
-from tax_api_service import init_tax_system
-from tax_calculation_engine import (
+from tax_automation.tax_calculation_engine import (
     CalculationMethod,
     TaxCalculationEngine,
     TaxCalculationResult,
@@ -23,7 +21,7 @@ from tax_calculation_engine import (
     TaxType,
     Transaction,
 )
-from tax_rule_management import SAMPLE_TAX_RULES, TaxRuleDatabase, TaxRuleManager
+from tax_automation.tax_rule_management import SAMPLE_TAX_RULES, TaxRuleDatabase, TaxRuleManager
 
 __version__ = "1.0.0"
 __author__ = "FinFlow Team"
@@ -40,6 +38,4 @@ __all__ = [
     "TaxRuleManager",
     "TaxRuleDatabase",
     "SAMPLE_TAX_RULES",
-    "tax_api_app",
-    "init_tax_system",
 ]

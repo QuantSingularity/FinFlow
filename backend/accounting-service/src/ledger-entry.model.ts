@@ -3,7 +3,7 @@ import {
   LedgerEntry,
   LedgerEntryCreateInput,
   LedgerEntryUpdateInput,
-} from "../types/ledger-entry.types";
+} from "./types/ledger-entry.types";
 
 class LedgerEntryModel {
   private prisma: PrismaClient;
@@ -100,6 +100,53 @@ class LedgerEntryModel {
       },
       orderBy: { createdAt: "desc" },
     });
+  }
+
+  async getAccountBalances(): Promise<Record<string, number>> {
+    const entries = await this.findAll();
+    const balances: Record<string, number> = {};
+    for (const entry of entries) {
+      if (!balances[entry.accountId]) balances[entry.accountId] = 0;
+      balances[entry.accountId] += entry.isCredit
+        ? -entry.amount
+        : entry.amount;
+    }
+    return balances;
+  }
+
+  async getAccountBalancesByDateRange(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<Record<string, number>> {
+    const entries = await this.findByDateRange(startDate, endDate);
+    const balances: Record<string, number> = {};
+    for (const entry of entries) {
+      if (!balances[entry.accountId]) balances[entry.accountId] = 0;
+      balances[entry.accountId] += entry.isCredit
+        ? -entry.amount
+        : entry.amount;
+    }
+    return balances;
+  }
+
+  async getAccountBalanceByDate(
+    accountId: string,
+    asOfDate: Date,
+  ): Promise<{ accountId: string; totalDebit: number; totalCredit: number }> {
+    const entries = await this.findByDateRange(
+      new Date("1970-01-01"),
+      asOfDate,
+    );
+    const accountEntries = entries.filter(
+      (e: any) => e.accountId === accountId,
+    );
+    const totalDebit = accountEntries
+      .filter((e: any) => !e.isCredit)
+      .reduce((sum: number, e: any) => sum + e.amount, 0);
+    const totalCredit = accountEntries
+      .filter((e: any) => e.isCredit)
+      .reduce((sum: number, e: any) => sum + e.amount, 0);
+    return { accountId, totalDebit, totalCredit };
   }
 }
 

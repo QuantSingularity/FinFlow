@@ -1,6 +1,6 @@
 import { PaymentStatus } from "@prisma/client";
 import paymentModel from "./models/payment.model";
-import { sendMessage } from "../../../common/kafka";
+import { sendMessage } from "../../common/kafka";
 import {
   Payment,
   PaymentCreateInput,
@@ -8,7 +8,7 @@ import {
   ChargeInput,
   RefundInput,
   ProcessorType,
-} from "./payment.types";
+} from "./types/payment.types";
 import logger from "./utils/logger";
 import paymentProcessorFactory from "./factories/payment-processor.factory";
 
@@ -17,7 +17,7 @@ class PaymentService {
     try {
       return await paymentModel.findById(id);
     } catch (error) {
-      logger.error(`Error finding payment by ID: ${error}`);
+      logger.error("Error finding payment by ID: " + error);
       throw error;
     }
   }
@@ -26,16 +26,20 @@ class PaymentService {
     try {
       return await paymentModel.findByUserId(userId);
     } catch (error) {
-      logger.error(`Error finding payments by user ID: ${error}`);
+      logger.error("Error finding payments by user ID: " + error);
       throw error;
     }
+  }
+
+  async getUserPayments(userId: string): Promise<Payment[]> {
+    return this.findByUserId(userId);
   }
 
   async findByRequestId(requestId: string): Promise<Payment | null> {
     try {
       return await paymentModel.findByMetadataRequestId(requestId);
     } catch (error) {
-      logger.error(`Error finding payment by request ID: ${error}`);
+      logger.error("Error finding payment by request ID: " + error);
       return null;
     }
   }
@@ -44,7 +48,7 @@ class PaymentService {
     try {
       return await paymentModel.findRefundByMetadataRequestId(requestId);
     } catch (error) {
-      logger.error(`Error finding refund by request ID: ${error}`);
+      logger.error("Error finding refund by request ID: " + error);
       return null;
     }
   }
@@ -57,6 +61,84 @@ class PaymentService {
 
   getProcessorConfigs(): Record<string, Record<string, any>> {
     return paymentProcessorFactory.getAllClientConfigs();
+  }
+
+  /**
+   * Process a payment — validates details then charges via the processor.
+   * This is the method integration and unit tests expect.
+   */
+  async processPayment(paymentDetails: {
+    amount: number;
+    currency?: string;
+    source: string;
+    description?: string;
+    metadata?: any;
+    processorType?: ProcessorType;
+    userId?: string;
+  }): Promise<any> {
+    try {
+      const {
+        amount,
+        currency = "usd",
+        source,
+        metadata,
+        processorType = ProcessorType.STRIPE,
+        userId = "",
+      } = paymentDetails;
+
+      const processor = paymentProcessorFactory.getProcessor(processorType);
+
+      if (!processor.validatePaymentDetails(paymentDetails)) {
+        const err = new Error("Invalid payment details");
+        err.name = "ValidationError";
+        throw err;
+      }
+
+      const result = await processor.processPayment(paymentDetails);
+      return result;
+    } catch (error) {
+      logger.error("Error processing payment: " + error);
+      throw error;
+    }
+  }
+
+  /**
+   * Refund a payment via the processor.
+   */
+  async refundPayment(refundDetails: {
+    paymentId: string;
+    amount?: number;
+    reason?: string;
+    processorType?: ProcessorType;
+    processorPaymentId?: string;
+  }): Promise<any> {
+    try {
+      const { processorType = ProcessorType.STRIPE } = refundDetails;
+      const processor = paymentProcessorFactory.getProcessor(processorType);
+      const result = await processor.refundPayment(refundDetails);
+      return result;
+    } catch (error) {
+      logger.error("Error refunding payment: " + error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the status of a payment from the processor.
+   */
+  async getPaymentStatus(
+    paymentId: string,
+    processorType: ProcessorType | string,
+    processorPaymentId: string,
+  ): Promise<any> {
+    try {
+      const processor = paymentProcessorFactory.getProcessor(processorType);
+      const result = await processor.getPaymentStatus(processorPaymentId);
+      return result;
+    } catch (error) {
+      logger.error("Error getting payment status: " + error);
+      throw error;
+    }
   }
 
   async createCharge(chargeInput: ChargeInput): Promise<Payment> {
@@ -95,11 +177,9 @@ class PaymentService {
 
       const payment = await paymentModel.create(paymentData);
       await this.publishPaymentCompletedEvent(payment);
-
       return payment;
     } catch (error: any) {
-      logger.error(`Error creating payment charge: ${error}`);
-
+      logger.error("Error creating payment charge: " + error);
       const {
         userId,
         amount,
@@ -107,7 +187,6 @@ class PaymentService {
         metadata,
         processorType = ProcessorType.STRIPE,
       } = chargeInput;
-
       const paymentData: PaymentCreateInput = {
         userId,
         amount,
@@ -117,10 +196,8 @@ class PaymentService {
         processorData: { error: error.message },
         metadata,
       };
-
       const payment = await paymentModel.create(paymentData);
       await this.publishPaymentFailedEvent(payment, error.message);
-
       return payment;
     }
   }
@@ -135,7 +212,6 @@ class PaymentService {
       } = chargeInput;
 
       const processor = paymentProcessorFactory.getProcessor(processorType);
-
       const paymentIntent = await processor.createPaymentIntent(
         Math.round(amount * 100),
         currency,
@@ -150,7 +226,7 @@ class PaymentService {
         currency,
       };
     } catch (error) {
-      logger.error(`Error creating payment intent: ${error}`);
+      logger.error("Error creating payment intent: " + error);
       throw error;
     }
   }
@@ -158,37 +234,30 @@ class PaymentService {
   async createRefund(refundInput: RefundInput): Promise<Payment> {
     try {
       const { paymentId, amount, reason } = refundInput;
-
       const payment = await this.findById(paymentId);
       if (!payment) {
         const error = new Error("Payment not found");
         error.name = "NotFoundError";
         throw error;
       }
-
       if (payment.status !== PaymentStatus.COMPLETED) {
         const error = new Error("Payment cannot be refunded");
         error.name = "ValidationError";
         throw error;
       }
-
       const processor = paymentProcessorFactory.getProcessor(
         payment.processorType,
       );
-
       const processorRefund = await processor.createRefund(
         payment.processorId!,
         amount ? Math.round(amount * 100) : undefined,
         reason,
       );
-
       const paymentData: PaymentUpdateInput = {
         status: PaymentStatus.REFUNDED,
         processorData: { ...payment.processorData, refund: processorRefund },
       };
-
       const updatedPayment = await paymentModel.update(paymentId, paymentData);
-
       await sendMessage("payment_refunded", {
         id: updatedPayment.id,
         userId: updatedPayment.userId,
@@ -201,10 +270,9 @@ class PaymentService {
         refundAmount: amount || updatedPayment.amount,
         reason,
       });
-
       return updatedPayment;
     } catch (error) {
-      logger.error(`Error creating refund: ${error}`);
+      logger.error("Error creating refund: " + error);
       throw error;
     }
   }
@@ -221,7 +289,6 @@ class PaymentService {
         payload,
         signature,
       );
-
       switch (processorType) {
         case ProcessorType.STRIPE:
           await this.handleStripeWebhookEvent(verifiedEvent);
@@ -233,10 +300,10 @@ class PaymentService {
           await this.handleSquareWebhookEvent(verifiedEvent);
           break;
         default:
-          logger.info(`Unhandled processor type for webhook: ${processorType}`);
+          logger.info("Unhandled processor type for webhook: " + processorType);
       }
     } catch (error) {
-      logger.error(`Error handling webhook event: ${error}`);
+      logger.error("Error handling webhook event: " + error);
       throw error;
     }
   }
@@ -253,7 +320,7 @@ class PaymentService {
         await this.handleStripeChargeRefunded(event.data.object);
         break;
       default:
-        logger.info(`Unhandled Stripe webhook event type: ${event.type}`);
+        logger.info("Unhandled Stripe webhook event type: " + event.type);
     }
   }
 
@@ -269,7 +336,7 @@ class PaymentService {
         await this.handlePayPalPaymentRefunded(event.resource);
         break;
       default:
-        logger.info(`Unhandled PayPal webhook event type: ${event.event_type}`);
+        logger.info("Unhandled PayPal webhook event type: " + event.event_type);
     }
   }
 
@@ -285,20 +352,18 @@ class PaymentService {
         await this.handleSquareRefundCreated(event.data.object.refund);
         break;
       default:
-        logger.info(`Unhandled Square webhook event type: ${event.type}`);
+        logger.info("Unhandled Square webhook event type: " + event.type);
     }
   }
 
   private async handleStripeChargeSucceeded(charge: any): Promise<void> {
     const existingPayment = await paymentModel.findByProcessorId(charge.id);
     if (existingPayment) return;
-
     const userId = charge.metadata?.userId;
     if (!userId) {
       logger.error("User ID not found in charge metadata");
       return;
     }
-
     const payment = await paymentModel.create({
       userId,
       amount: charge.amount / 100,
@@ -315,13 +380,11 @@ class PaymentService {
   private async handleStripeChargeFailed(charge: any): Promise<void> {
     const existingPayment = await paymentModel.findByProcessorId(charge.id);
     if (existingPayment) return;
-
     const userId = charge.metadata?.userId;
     if (!userId) {
       logger.error("User ID not found in charge metadata");
       return;
     }
-
     const payment = await paymentModel.create({
       userId,
       amount: charge.amount / 100,
@@ -338,15 +401,13 @@ class PaymentService {
   private async handleStripeChargeRefunded(charge: any): Promise<void> {
     const payment = await paymentModel.findByProcessorId(charge.id);
     if (!payment) {
-      logger.error(`Payment not found for Stripe charge ID: ${charge.id}`);
+      logger.error("Payment not found for Stripe charge ID: " + charge.id);
       return;
     }
-
     const updatedPayment = await paymentModel.update(payment.id, {
       status: PaymentStatus.REFUNDED,
       processorData: charge,
     });
-
     await sendMessage("payment_refunded", {
       id: updatedPayment.id,
       userId: updatedPayment.userId,
@@ -363,14 +424,12 @@ class PaymentService {
   private async handlePayPalPaymentCompleted(resource: any): Promise<void> {
     const existingPayment = await paymentModel.findByProcessorId(resource.id);
     if (existingPayment) return;
-
     const customId = resource.custom_id || "";
     const userId = customId.split("_")[0];
     if (!userId) {
       logger.error("User ID not found in PayPal payment custom ID");
       return;
     }
-
     const payment = await paymentModel.create({
       userId,
       amount: parseFloat(resource.amount.value),
@@ -387,14 +446,12 @@ class PaymentService {
   private async handlePayPalPaymentDenied(resource: any): Promise<void> {
     const existingPayment = await paymentModel.findByProcessorId(resource.id);
     if (existingPayment) return;
-
     const customId = resource.custom_id || "";
     const userId = customId.split("_")[0];
     if (!userId) {
       logger.error("User ID not found in PayPal payment custom ID");
       return;
     }
-
     const payment = await paymentModel.create({
       userId,
       amount: parseFloat(resource.amount.value),
@@ -414,15 +471,13 @@ class PaymentService {
   private async handlePayPalPaymentRefunded(resource: any): Promise<void> {
     const payment = await paymentModel.findByProcessorId(resource.id);
     if (!payment) {
-      logger.error(`Payment not found for PayPal payment ID: ${resource.id}`);
+      logger.error("Payment not found for PayPal payment ID: " + resource.id);
       return;
     }
-
     const updatedPayment = await paymentModel.update(payment.id, {
       status: PaymentStatus.REFUNDED,
       processorData: resource,
     });
-
     await sendMessage("payment_refunded", {
       id: updatedPayment.id,
       userId: updatedPayment.userId,
@@ -434,14 +489,12 @@ class PaymentService {
   private async handleSquarePaymentCreated(payment: any): Promise<void> {
     const existingPayment = await paymentModel.findByProcessorId(payment.id);
     if (existingPayment) return;
-
     const referenceId = payment.reference_id || "";
     const userId = referenceId.split("_")[0];
     if (!userId) {
       logger.error("User ID not found in Square payment reference ID");
       return;
     }
-
     const status =
       payment.status === "COMPLETED"
         ? PaymentStatus.COMPLETED
@@ -456,28 +509,23 @@ class PaymentService {
       processorData: payment,
       metadata: { referenceId },
     });
-
-    if (payment.status === "COMPLETED") {
+    if (payment.status === "COMPLETED")
       await this.publishPaymentCompletedEvent(paymentRecord);
-    }
   }
 
   private async handleSquarePaymentUpdated(payment: any): Promise<void> {
     const existingPayment = await paymentModel.findByProcessorId(payment.id);
     if (!existingPayment) {
-      logger.error(`Payment not found for Square payment ID: ${payment.id}`);
+      logger.error("Payment not found for Square payment ID: " + payment.id);
       return;
     }
-
     let status = existingPayment.status;
     if (payment.status === "COMPLETED") status = PaymentStatus.COMPLETED;
     else if (payment.status === "FAILED") status = PaymentStatus.FAILED;
-
     const updatedPayment = await paymentModel.update(existingPayment.id, {
       status,
       processorData: payment,
     });
-
     if (
       status === PaymentStatus.COMPLETED &&
       existingPayment.status !== PaymentStatus.COMPLETED
@@ -495,16 +543,14 @@ class PaymentService {
     const payment = await paymentModel.findByProcessorId(refund.payment_id);
     if (!payment) {
       logger.error(
-        `Payment not found for Square payment ID: ${refund.payment_id}`,
+        "Payment not found for Square payment ID: " + refund.payment_id,
       );
       return;
     }
-
     const updatedPayment = await paymentModel.update(payment.id, {
       status: PaymentStatus.REFUNDED,
       processorData: { ...payment.processorData, refund },
     });
-
     await sendMessage("payment_refunded", {
       id: updatedPayment.id,
       userId: updatedPayment.userId,
@@ -526,7 +572,7 @@ class PaymentService {
         createdAt: payment.createdAt,
       });
     } catch (error) {
-      logger.error(`Error publishing payment_completed event: ${error}`);
+      logger.error("Error publishing payment_completed event: " + error);
     }
   }
 
@@ -545,7 +591,7 @@ class PaymentService {
         createdAt: payment.createdAt,
       });
     } catch (error) {
-      logger.error(`Error publishing payment_failed event: ${error}`);
+      logger.error("Error publishing payment_failed event: " + error);
     }
   }
 }

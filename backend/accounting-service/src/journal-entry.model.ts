@@ -3,7 +3,7 @@ import {
   JournalEntry,
   JournalEntryCreateInput,
   JournalEntryUpdateInput,
-} from "../types/journal-entry.types";
+} from "./journal-entry.types";
 
 class JournalEntryModel {
   private prisma: PrismaClient;

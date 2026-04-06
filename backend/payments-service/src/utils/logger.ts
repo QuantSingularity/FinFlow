@@ -1,4 +1,4 @@
-import commonLogger from "../../common/logger";
+import commonLogger from "../../../common/logger";
 
 /**
  * Logger utility for application-wide logging, wrapping the common logger.

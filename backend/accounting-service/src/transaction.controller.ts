@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
-import transactionService from "../services/transaction.service";
+import transactionService from "./transaction.service";
 import {
   TransactionCreateInput,
   TransactionUpdateInput,
-} from "../types/transaction.types";
+} from "./transaction.types";
 
 class TransactionController {
   // Create a new transaction
