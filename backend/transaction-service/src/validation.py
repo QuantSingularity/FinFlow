@@ -21,11 +21,13 @@ def _coerce_errors(errors: list) -> list:
     result = []
     for e in errors:
         if isinstance(e, dict):
-            result.append(ValidationError(
-                code=e.get("code", "UNKNOWN"),
-                message=e.get("message", ""),
-                field=e.get("field"),
-            ))
+            result.append(
+                ValidationError(
+                    code=e.get("code", "UNKNOWN"),
+                    message=e.get("message", ""),
+                    field=e.get("field"),
+                )
+            )
         else:
             result.append(e)
     return result
