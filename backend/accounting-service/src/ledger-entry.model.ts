@@ -21,18 +21,23 @@ class LedgerEntryModel {
   async findByJournalEntryId(journalEntryId: string): Promise<LedgerEntry[]> {
     return this.prisma.ledgerEntry.findMany({
       where: { journalEntryId },
-      include: {
-        account: true,
-      },
+      include: { account: true },
+    });
+  }
+
+  async findByJournalEntryIds(
+    journalEntryIds: string[],
+  ): Promise<LedgerEntry[]> {
+    return this.prisma.ledgerEntry.findMany({
+      where: { journalEntryId: { in: journalEntryIds } },
+      include: { account: true },
     });
   }
 
   async findByAccountId(accountId: string): Promise<LedgerEntry[]> {
     return this.prisma.ledgerEntry.findMany({
       where: { accountId },
-      include: {
-        journalEntry: true,
-      },
+      include: { journalEntry: true },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -40,43 +45,34 @@ class LedgerEntryModel {
   async create(data: LedgerEntryCreateInput): Promise<LedgerEntry> {
     return this.prisma.ledgerEntry.create({
       data,
-      include: {
-        account: true,
-        journalEntry: true,
-      },
+      include: { account: true, journalEntry: true },
     });
   }
 
-  async createMany(data: LedgerEntryCreateInput[]): Promise<number> {
-    const result = await this.prisma.ledgerEntry.createMany({
-      data,
-    });
-    return result.count;
+  async createMany(data: any[]): Promise<any[]> {
+    const created: LedgerEntry[] = [];
+    for (const entry of data) {
+      const result = await this.prisma.ledgerEntry.create({ data: entry });
+      created.push(result);
+    }
+    return created;
   }
 
   async update(id: string, data: LedgerEntryUpdateInput): Promise<LedgerEntry> {
     return this.prisma.ledgerEntry.update({
       where: { id },
       data,
-      include: {
-        account: true,
-        journalEntry: true,
-      },
+      include: { account: true, journalEntry: true },
     });
   }
 
   async delete(id: string): Promise<LedgerEntry> {
-    return this.prisma.ledgerEntry.delete({
-      where: { id },
-    });
+    return this.prisma.ledgerEntry.delete({ where: { id } });
   }
 
   async findAll(): Promise<LedgerEntry[]> {
     return this.prisma.ledgerEntry.findMany({
-      include: {
-        account: true,
-        journalEntry: true,
-      },
+      include: { account: true, journalEntry: true },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -88,45 +84,69 @@ class LedgerEntryModel {
     return this.prisma.ledgerEntry.findMany({
       where: {
         journalEntry: {
-          date: {
-            gte: startDate,
-            lte: endDate,
-          },
+          date: { gte: startDate, lte: endDate },
         },
       },
-      include: {
-        account: true,
-        journalEntry: true,
-      },
+      include: { account: true, journalEntry: true },
       orderBy: { createdAt: "desc" },
     });
   }
 
-  async getAccountBalances(): Promise<Record<string, number>> {
+  /**
+   * Returns an array of {accountId, totalDebit, totalCredit} objects.
+   */
+  async getAccountBalances(): Promise<
+    { accountId: string; totalDebit: number; totalCredit: number }[]
+  > {
     const entries = await this.findAll();
-    const balances: Record<string, number> = {};
+    const map: Record<string, { totalDebit: number; totalCredit: number }> = {};
+
     for (const entry of entries) {
-      if (!balances[entry.accountId]) balances[entry.accountId] = 0;
-      balances[entry.accountId] += entry.isCredit
-        ? -entry.amount
-        : entry.amount;
+      if (!map[entry.accountId]) {
+        map[entry.accountId] = { totalDebit: 0, totalCredit: 0 };
+      }
+      if ((entry as any).isCredit) {
+        map[entry.accountId].totalCredit += entry.amount;
+      } else {
+        map[entry.accountId].totalDebit += entry.amount;
+      }
     }
-    return balances;
+
+    return Object.entries(map).map(([accountId, v]) => ({
+      accountId,
+      totalDebit: v.totalDebit,
+      totalCredit: v.totalCredit,
+    }));
   }
 
+  /**
+   * Returns array of {accountId, totalDebit, totalCredit} for given account IDs in date range.
+   */
   async getAccountBalancesByDateRange(
+    accountIds: string[],
     startDate: Date,
     endDate: Date,
-  ): Promise<Record<string, number>> {
+  ): Promise<{ accountId: string; totalDebit: number; totalCredit: number }[]> {
     const entries = await this.findByDateRange(startDate, endDate);
-    const balances: Record<string, number> = {};
-    for (const entry of entries) {
-      if (!balances[entry.accountId]) balances[entry.accountId] = 0;
-      balances[entry.accountId] += entry.isCredit
-        ? -entry.amount
-        : entry.amount;
+    const filtered = entries.filter((e) => accountIds.includes(e.accountId));
+
+    const map: Record<string, { totalDebit: number; totalCredit: number }> = {};
+    for (const entry of filtered) {
+      if (!map[entry.accountId]) {
+        map[entry.accountId] = { totalDebit: 0, totalCredit: 0 };
+      }
+      if ((entry as any).isCredit) {
+        map[entry.accountId].totalCredit += entry.amount;
+      } else {
+        map[entry.accountId].totalDebit += entry.amount;
+      }
     }
-    return balances;
+
+    return Object.entries(map).map(([accountId, v]) => ({
+      accountId,
+      totalDebit: v.totalDebit,
+      totalCredit: v.totalCredit,
+    }));
   }
 
   async getAccountBalanceByDate(
@@ -137,15 +157,16 @@ class LedgerEntryModel {
       new Date("1970-01-01"),
       asOfDate,
     );
-    const accountEntries = entries.filter(
-      (e: any) => e.accountId === accountId,
-    );
+    const accountEntries = entries.filter((e) => e.accountId === accountId);
+
     const totalDebit = accountEntries
       .filter((e: any) => !e.isCredit)
-      .reduce((sum: number, e: any) => sum + e.amount, 0);
+      .reduce((sum, e) => sum + e.amount, 0);
+
     const totalCredit = accountEntries
       .filter((e: any) => e.isCredit)
-      .reduce((sum: number, e: any) => sum + e.amount, 0);
+      .reduce((sum, e) => sum + e.amount, 0);
+
     return { accountId, totalDebit, totalCredit };
   }
 }

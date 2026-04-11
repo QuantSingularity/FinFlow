@@ -13,6 +13,7 @@ module.exports = {
           esModuleInterop: true,
           allowSyntheticDefaultImports: true,
           skipLibCheck: true,
+          rootDir: "..",
         },
       },
     ],
@@ -21,6 +22,9 @@ module.exports = {
     "^../../../common/(.*)$": "<rootDir>/../../common/$1",
     "^../../common/(.*)$": "<rootDir>/../common/$1",
   },
+  // Resolve modules from the monorepo root node_modules
+  modulePaths: ["<rootDir>/../node_modules"],
+  moduleDirectories: ["node_modules", "<rootDir>/../node_modules"],
   collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts"],
   testTimeout: 10000,
 };

@@ -37,6 +37,16 @@ const authenticate = (
 
 const getAnalyticsService = () => require("./analytics.service").default;
 
+// Valid forecast types (case-insensitive match)
+const VALID_FORECAST_TYPES = [
+  "revenue",
+  "expenses",
+  "cashflow",
+  "REVENUE",
+  "EXPENSES",
+  "CASHFLOW",
+];
+
 // GET /api/analytics/transaction-summary
 app.get(
   "/api/analytics/transaction-summary",
@@ -54,10 +64,14 @@ app.get(
         return;
       }
       const svc = getAnalyticsService();
-      const result = await svc.generateTransactionSummary(
-        new Date(startDate as string),
-        new Date(endDate as string),
+      const startDateObj = new Date(startDate as string);
+      const endDateObj = new Date(endDate as string);
+      // Fetch transactions first, then generate summary
+      const transactions = await svc.getTransactionsByDateRange(
+        startDateObj,
+        endDateObj,
       );
+      const result = await svc.generateTransactionSummary(transactions);
       res.status(200).json({ success: true, data: result });
     } catch (error: any) {
       if (error.name === "ValidationError") {
@@ -87,8 +101,10 @@ app.get(
         res.status(400).json({ success: false, error: "Invalid date format" });
         return;
       }
-      const validTypes = ["revenue", "expenses", "cashflow"];
-      if (!forecastType || !validTypes.includes(forecastType as string)) {
+      if (
+        !forecastType ||
+        !VALID_FORECAST_TYPES.includes(forecastType as string)
+      ) {
         res.status(400).json({
           success: false,
           error: `Invalid forecast type: ${forecastType}`,

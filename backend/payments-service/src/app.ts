@@ -84,15 +84,13 @@ app.get(
   async (req: Request, res: Response) => {
     try {
       const paymentId = req.params.id;
-      const payment = await paymentService.findById(paymentId);
-      if (!payment) {
-        res.status(404).json({ success: false, error: "Payment not found" });
-        return;
-      }
+      const processorType = (req.query.processorType as string) || "stripe";
+      const processorPaymentId =
+        (req.query.processorPaymentId as string) || paymentId;
       const statusResult = await paymentService.getPaymentStatus(
         paymentId,
-        payment.processorType,
-        payment.processorId || paymentId,
+        processorType,
+        processorPaymentId,
       );
       res.status(200).json({ success: true, data: statusResult });
     } catch (error: any) {
@@ -118,13 +116,13 @@ app.post(
   async (req: Request, res: Response) => {
     try {
       const paymentId = req.params.id;
-      const { amount, reason } = req.body;
+      const { amount, reason, processorType, processorPaymentId } = req.body;
       const result = await paymentService.refundPayment({
         paymentId,
         amount,
         reason,
-        processorType: req.body.processorType,
-        processorPaymentId: req.body.processorPaymentId,
+        processorType,
+        processorPaymentId,
       });
       res.status(200).json({ success: true, data: result });
     } catch (error: any) {

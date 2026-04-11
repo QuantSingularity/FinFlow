@@ -1,124 +1,129 @@
 import journalEntryModel from "./journal-entry.model";
 import ledgerEntryModel from "./ledger-entry.model";
 import accountModel from "./account.model";
-import { JournalEntryCreateInput, JournalEntry } from "./journal-entry.types";
-import { LedgerEntryCreateInput } from "./types/ledger-entry.types";
+import analyticsService from "./analytics.service";
+import { JournalEntryCreateInput } from "./journal-entry.types";
 import { sendMessage } from "../../common/kafka";
 import { logger } from "../../common/logger";
 
+export interface LedgerEntryInput {
+  accountId: string;
+  debit: number;
+  credit: number;
+  description?: string;
+}
+
 class AccountingService {
-  /**
-   * Create a journal entry with corresponding ledger entries
-   * Implements double-entry accounting principles
-   */
   async createJournalEntry(
     journalEntryData: JournalEntryCreateInput,
-    ledgerEntries: {
-      accountId: string;
-      amount: number;
-      isCredit: boolean;
-      description?: string;
-    }[],
-  ): Promise<JournalEntry> {
+    ledgerEntries: LedgerEntryInput[],
+  ): Promise<{ journalEntry: any; ledgerEntries: any[] }> {
     try {
-      // Validate double-entry accounting principle: debits must equal credits
       this.validateDoubleEntry(ledgerEntries);
 
-      // Create journal entry
       const journalEntry = await journalEntryModel.create(journalEntryData);
 
-      // Create ledger entries
-      const ledgerEntriesData: LedgerEntryCreateInput[] = ledgerEntries.map(
-        (entry) => ({
-          journalEntryId: journalEntry.id,
-          accountId: entry.accountId,
-          amount: entry.amount,
-          isCredit: entry.isCredit,
-          description: entry.description,
-        }),
+      const ledgerEntriesData = ledgerEntries.map((entry) => ({
+        ...entry,
+        journalEntryId: journalEntry.id,
+      }));
+
+      const createdLedgerEntries =
+        await ledgerEntryModel.createMany(ledgerEntriesData);
+
+      const result = { journalEntry, ledgerEntries: createdLedgerEntries };
+
+      await analyticsService.sendAccountingDataToAnalytics(
+        result,
+        "JOURNAL_ENTRY",
       );
 
-      await ledgerEntryModel.createMany(ledgerEntriesData);
-
-      // Publish accounting event to Kafka
       await this.publishAccountingEvent("journal_entry_created", {
         journalEntryId: journalEntry.id,
-        date: journalEntry.date,
-        reference: journalEntry.reference,
-        description: journalEntry.description,
-        amount: this.calculateJournalEntryAmount(ledgerEntries),
-        ledgerEntries: ledgerEntries.map((entry) => ({
-          accountId: entry.accountId,
-          amount: entry.amount,
-          isCredit: entry.isCredit,
-        })),
+        ledgerEntries: ledgerEntriesData,
       });
 
-      return journalEntry;
+      return result;
     } catch (error) {
       logger.error(`Error creating journal entry: ${error}`);
       throw error;
     }
   }
 
-  /**
-   * Validate that debits equal credits in a set of ledger entries
-   */
-  private validateDoubleEntry(
-    ledgerEntries: { accountId: string; amount: number; isCredit: boolean }[],
-  ): void {
+  private validateDoubleEntry(ledgerEntries: LedgerEntryInput[]): void {
     let totalDebits = 0;
     let totalCredits = 0;
 
     for (const entry of ledgerEntries) {
-      if (entry.isCredit) {
-        totalCredits += entry.amount;
-      } else {
-        totalDebits += entry.amount;
-      }
+      totalDebits += entry.debit || 0;
+      totalCredits += entry.credit || 0;
     }
 
-    // Check if debits equal credits (allowing for small floating point differences)
     if (Math.abs(totalDebits - totalCredits) > 0.001) {
-      throw new Error(
-        `Double-entry accounting principle violated: debits (${totalDebits}) do not equal credits (${totalCredits})`,
-      );
+      throw new Error("Ledger entries must be balanced");
     }
   }
 
-  /**
-   * Calculate the total amount of a journal entry (sum of all debits or credits)
-   */
-  private calculateJournalEntryAmount(
-    ledgerEntries: { amount: number; isCredit: boolean }[],
-  ): number {
-    // Sum all debits (or credits, they should be equal)
-    return ledgerEntries
-      .filter((entry) => !entry.isCredit)
-      .reduce((sum, entry) => sum + entry.amount, 0);
+  async getAllJournalEntries(): Promise<any[]> {
+    try {
+      const journalEntries = await journalEntryModel.findAll();
+
+      if (journalEntries.length === 0) {
+        return [];
+      }
+
+      const journalEntryIds = journalEntries.map((je: any) => je.id);
+      const allLedgerEntries =
+        await ledgerEntryModel.findByJournalEntryIds(journalEntryIds);
+
+      return journalEntries.map((je: any) => ({
+        ...je,
+        ledgerEntries: allLedgerEntries.filter(
+          (le: any) => le.journalEntryId === je.id,
+        ),
+      }));
+    } catch (error) {
+      logger.error("Error getting all journal entries: " + error);
+      throw error;
+    }
   }
 
-  /**
-   * Generate a trial balance report
-   */
   async generateTrialBalance(): Promise<any> {
     try {
-      const trialBalance = await accountModel.getTrialBalance();
+      const accounts = await accountModel.findAll();
+      const ledgerSummaries = await ledgerEntryModel.getAccountBalances();
 
-      // Calculate totals
-      let totalDebits = 0;
-      let totalCredits = 0;
+      let totalDebit = 0;
+      let totalCredit = 0;
 
-      trialBalance.forEach((entry) => {
-        totalDebits += entry.debitBalance;
-        totalCredits += entry.creditBalance;
+      const accountsWithBalances = accounts.map((account: any) => {
+        const summary = (ledgerSummaries as any[]).find(
+          (s: any) => s.accountId === account.id,
+        ) || { totalDebit: 0, totalCredit: 0 };
+
+        const debit = summary.totalDebit;
+        const credit = summary.totalCredit;
+        const balance = debit - credit;
+
+        totalDebit += debit;
+        totalCredit += credit;
+
+        return {
+          id: account.id,
+          name: account.name,
+          accountCode: account.accountCode || account.code,
+          accountType: account.accountType || account.type,
+          debit,
+          credit,
+          balance,
+        };
       });
 
       return {
-        entries: trialBalance,
-        totalDebits,
-        totalCredits,
-        isBalanced: Math.abs(totalDebits - totalCredits) <= 0.001,
+        accounts: accountsWithBalances,
+        totalDebit,
+        totalCredit,
+        isBalanced: Math.abs(totalDebit - totalCredit) <= 0.001,
       };
     } catch (error) {
       logger.error(`Error generating trial balance: ${error}`);
@@ -126,66 +131,70 @@ class AccountingService {
     }
   }
 
-  /**
-   * Generate an income statement for a specific period
-   */
   async generateIncomeStatement(startDate: Date, endDate: Date): Promise<any> {
     try {
-      // Get all revenue and expense accounts
       const revenueAccounts = await accountModel.findByType("REVENUE");
       const expenseAccounts = await accountModel.findByType("EXPENSE");
 
-      // Calculate revenue
-      const revenueItems = [];
-      let totalRevenue = 0;
+      const revenueAccountIds = revenueAccounts.map((a: any) => a.id);
+      const expenseAccountIds = expenseAccounts.map((a: any) => a.id);
 
-      for (const account of revenueAccounts) {
-        const balance = await this.getAccountBalanceForPeriod(
-          account.id,
+      const revenueSummaries =
+        await ledgerEntryModel.getAccountBalancesByDateRange(
+          revenueAccountIds,
           startDate,
           endDate,
         );
-        if (balance !== 0) {
-          revenueItems.push({
-            accountId: account.id,
-            accountCode: account.code,
-            accountName: account.name,
-            amount: balance,
-          });
-          totalRevenue += balance;
-        }
-      }
 
-      // Calculate expenses
-      const expenseItems = [];
-      let totalExpenses = 0;
-
-      for (const account of expenseAccounts) {
-        const balance = await this.getAccountBalanceForPeriod(
-          account.id,
+      const expenseSummaries =
+        await ledgerEntryModel.getAccountBalancesByDateRange(
+          expenseAccountIds,
           startDate,
           endDate,
         );
-        if (balance !== 0) {
-          expenseItems.push({
-            accountId: account.id,
-            accountCode: account.code,
-            accountName: account.name,
-            amount: balance,
-          });
-          totalExpenses += balance;
-        }
-      }
 
-      // Calculate net income
+      const revenueItems = revenueAccounts.map((account: any) => {
+        const summary = (revenueSummaries as any[]).find(
+          (s: any) => s.accountId === account.id,
+        ) || { totalDebit: 0, totalCredit: 0 };
+        const amount = summary.totalCredit - summary.totalDebit;
+        return {
+          accountId: account.id,
+          accountCode: account.accountCode || account.code,
+          name: account.name,
+          amount,
+        };
+      });
+
+      const expenseItems = expenseAccounts.map((account: any) => {
+        const summary = (expenseSummaries as any[]).find(
+          (s: any) => s.accountId === account.id,
+        ) || { totalDebit: 0, totalCredit: 0 };
+        const amount = summary.totalDebit - summary.totalCredit;
+        return {
+          accountId: account.id,
+          accountCode: account.accountCode || account.code,
+          name: account.name,
+          amount,
+        };
+      });
+
+      const totalRevenue = revenueItems.reduce(
+        (sum: number, item: any) => sum + item.amount,
+        0,
+      );
+      const totalExpenses = expenseItems.reduce(
+        (sum: number, item: any) => sum + item.amount,
+        0,
+      );
       const netIncome = totalRevenue - totalExpenses;
 
       return {
         startDate,
         endDate,
         revenueItems,
-        totalRevenue,
         expenseItems,
+        totalRevenue,
         totalExpenses,
         netIncome,
       };
@@ -195,69 +204,64 @@ class AccountingService {
     }
   }
 
-  /**
-   * Generate a balance sheet as of a specific date
-   */
+  async getAccountBalance(
+    accountId: string,
+    asOfDate: Date = new Date(),
+  ): Promise<number> {
+    try {
+      const account = await accountModel.findById(accountId);
+      if (!account) {
+        throw new Error("Account not found");
+      }
+
+      const ledgerSummary = await ledgerEntryModel.getAccountBalanceByDate(
+        accountId,
+        asOfDate,
+      );
+
+      const accountType = (account as any).accountType || (account as any).type;
+
+      if (accountType === "ASSET" || accountType === "EXPENSE") {
+        return ledgerSummary.totalDebit - ledgerSummary.totalCredit;
+      } else {
+        return ledgerSummary.totalCredit - ledgerSummary.totalDebit;
+      }
+    } catch (error) {
+      logger.error("Error getting account balance: " + error);
+      throw error;
+    }
+  }
+
   async generateBalanceSheet(asOfDate: Date): Promise<any> {
     try {
-      // Get all asset, liability, and equity accounts
       const assetAccounts = await accountModel.findByType("ASSET");
       const liabilityAccounts = await accountModel.findByType("LIABILITY");
       const equityAccounts = await accountModel.findByType("EQUITY");
 
-      // Calculate assets
-      const assetItems = [];
-      let totalAssets = 0;
-
-      for (const account of assetAccounts) {
-        const balance = await this.getAccountBalanceAsOf(account.id, asOfDate);
-        if (balance !== 0) {
-          assetItems.push({
-            accountId: account.id,
-            accountCode: account.code,
-            accountName: account.name,
-            amount: balance,
-          });
-          totalAssets += balance;
+      const buildItems = async (accounts: any[]) => {
+        const items = [];
+        let total = 0;
+        for (const account of accounts) {
+          const balance = await this.getAccountBalance(account.id, asOfDate);
+          if (balance !== 0) {
+            items.push({
+              accountId: account.id,
+              accountCode: account.accountCode || account.code,
+              name: account.name,
+              amount: balance,
+            });
+            total += balance;
+          }
         }
-      }
+        return { items, total };
+      };
 
-      // Calculate liabilities
-      const liabilityItems = [];
-      let totalLiabilities = 0;
-
-      for (const account of liabilityAccounts) {
-        const balance = await this.getAccountBalanceAsOf(account.id, asOfDate);
-        if (balance !== 0) {
-          liabilityItems.push({
-            accountId: account.id,
-            accountCode: account.code,
-            accountName: account.name,
-            amount: balance,
-          });
-          totalLiabilities += balance;
-        }
-      }
-
-      // Calculate equity
-      const equityItems = [];
-      let totalEquity = 0;
-
-      for (const account of equityAccounts) {
-        const balance = await this.getAccountBalanceAsOf(account.id, asOfDate);
-        if (balance !== 0) {
-          equityItems.push({
-            accountId: account.id,
-            accountCode: account.code,
-            accountName: account.name,
-            amount: balance,
-          });
-          totalEquity += balance;
-        }
-      }
-
-      // Calculate retained earnings (if not already included in equity accounts)
-      // This would typically involve calculating net income from all previous periods
+      const { items: assetItems, total: totalAssets } =
+        await buildItems(assetAccounts);
+      const { items: liabilityItems, total: totalLiabilities } =
+        await buildItems(liabilityAccounts);
+      const { items: equityItems, total: totalEquity } =
+        await buildItems(equityAccounts);
 
       return {
         asOfDate,
@@ -275,47 +279,37 @@ class AccountingService {
     }
   }
 
-  /**
-   * Generate a cash flow statement for a specific period
-   */
   async generateCashFlowStatement(
     startDate: Date,
     endDate: Date,
   ): Promise<any> {
     try {
-      // This is a simplified implementation
-      // A complete implementation would categorize cash flows into operating, investing, and financing activities
-
-      // Get cash accounts
       const cashAccounts = await accountModel.findByType("ASSET");
       const cashAccountIds = cashAccounts
-        .filter((account) => account.code.startsWith("101")) // Assuming cash accounts start with 101
-        .map((account) => account.id);
+        .filter((account: any) => {
+          const code = account.code || account.accountCode || "";
+          return code.startsWith("101");
+        })
+        .map((account: any) => account.id);
 
       if (cashAccountIds.length === 0) {
         throw new Error("No cash accounts found");
       }
 
-      // Get all ledger entries for cash accounts within the date range
-      const cashFlows = [];
+      const cashFlows: any[] = [];
       let netCashFlow = 0;
 
       for (const accountId of cashAccountIds) {
         const ledgerEntries = await ledgerEntryModel.findByAccountId(accountId);
 
-        // Filter entries by date range and include journal entry details
-        const filteredEntries = ledgerEntries.filter((entry) => {
+        const filteredEntries = ledgerEntries.filter((entry: any) => {
           const entryDate = new Date(entry.journalEntry.date);
           return entryDate >= startDate && entryDate <= endDate;
         });
 
-        // Calculate cash flow for this account
-        let accountCashFlow = 0;
-
         for (const entry of filteredEntries) {
           const amount = entry.isCredit ? -entry.amount : entry.amount;
-          accountCashFlow += amount;
-
+          netCashFlow += amount;
           cashFlows.push({
             date: entry.journalEntry.date,
             description: entry.journalEntry.description,
@@ -323,15 +317,13 @@ class AccountingService {
             amount,
           });
         }
-
-        netCashFlow += accountCashFlow;
       }
 
       return {
         startDate,
         endDate,
         cashFlows: cashFlows.sort(
-          (a, b) => a.date.getTime() - b.date.getTime(),
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
         ),
         netCashFlow,
       };
@@ -341,114 +333,6 @@ class AccountingService {
     }
   }
 
-  /**
-   * Get account balance for a specific period
-   */
-  private async getAccountBalanceForPeriod(
-    accountId: string,
-    startDate: Date,
-    endDate: Date,
-  ): Promise<number> {
-    try {
-      const account = await accountModel.findById(accountId);
-      if (!account) {
-        throw new Error(`Account with ID ${accountId} not found`);
-      }
-
-      // Get all ledger entries for this account within the date range
-      const ledgerEntries = await ledgerEntryModel.findByAccountId(accountId);
-
-      // Filter entries by date range
-      const filteredEntries = ledgerEntries.filter((entry) => {
-        const entryDate = new Date(entry.journalEntry.date);
-        return entryDate >= startDate && entryDate <= endDate;
-      });
-
-      // Calculate balance based on account type and transactions
-      let balance = 0;
-
-      for (const entry of filteredEntries) {
-        if (entry.isCredit) {
-          // For asset and expense accounts, credits decrease the balance
-          // For liability, equity, and revenue accounts, credits increase the balance
-          if (account.type === "ASSET" || account.type === "EXPENSE") {
-            balance -= entry.amount;
-          } else {
-            balance += entry.amount;
-          }
-        } else {
-          // For asset and expense accounts, debits increase the balance
-          // For liability, equity, and revenue accounts, debits decrease the balance
-          if (account.type === "ASSET" || account.type === "EXPENSE") {
-            balance += entry.amount;
-          } else {
-            balance -= entry.amount;
-          }
-        }
-      }
-
-      return balance;
-    } catch (error) {
-      logger.error(`Error getting account balance for period: ${error}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Get account balance as of a specific date
-   */
-  private async getAccountBalanceAsOf(
-    accountId: string,
-    asOfDate: Date,
-  ): Promise<number> {
-    try {
-      const account = await accountModel.findById(accountId);
-      if (!account) {
-        throw new Error(`Account with ID ${accountId} not found`);
-      }
-
-      // Get all ledger entries for this account
-      const ledgerEntries = await ledgerEntryModel.findByAccountId(accountId);
-
-      // Filter entries by date
-      const filteredEntries = ledgerEntries.filter((entry) => {
-        const entryDate = new Date(entry.journalEntry.date);
-        return entryDate <= asOfDate;
-      });
-
-      // Calculate balance based on account type and transactions
-      let balance = 0;
-
-      for (const entry of filteredEntries) {
-        if (entry.isCredit) {
-          // For asset and expense accounts, credits decrease the balance
-          // For liability, equity, and revenue accounts, credits increase the balance
-          if (account.type === "ASSET" || account.type === "EXPENSE") {
-            balance -= entry.amount;
-          } else {
-            balance += entry.amount;
-          }
-        } else {
-          // For asset and expense accounts, debits increase the balance
-          // For liability, equity, and revenue accounts, debits decrease the balance
-          if (account.type === "ASSET" || account.type === "EXPENSE") {
-            balance += entry.amount;
-          } else {
-            balance -= entry.amount;
-          }
-        }
-      }
-
-      return balance;
-    } catch (error) {
-      logger.error(`Error getting account balance as of date: ${error}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Publish accounting event to Kafka
-   */
   private async publishAccountingEvent(
     eventType: string,
     data: any,
@@ -460,35 +344,6 @@ class AccountingService {
       });
     } catch (error) {
       logger.error(`Error publishing accounting event: ${error}`);
-      // Don't throw error, just log it
-    }
-  }
-
-  async getAllJournalEntries(): Promise<any[]> {
-    try {
-      return await journalEntryModel.findAll();
-    } catch (error) {
-      logger.error("Error getting all journal entries: " + error);
-      throw error;
-    }
-  }
-
-  async getAccountBalance(
-    accountId: string,
-    asOfDate: Date = new Date(),
-  ): Promise<any> {
-    try {
-      const account = await accountModel.findById(accountId);
-      if (!account) return null;
-      const ledgerSummary = await ledgerEntryModel.getAccountBalanceByDate(
-        accountId,
-        asOfDate,
-      );
-      const balance = ledgerSummary.totalDebit - ledgerSummary.totalCredit;
-      return { accountId, account, balance, ledgerSummary, asOfDate };
-    } catch (error) {
-      logger.error("Error getting account balance: " + error);
-      throw error;
     }
   }
 }

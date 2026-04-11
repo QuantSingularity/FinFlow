@@ -44,8 +44,19 @@ app.post(
   authenticate,
   async (req: Request, res: Response) => {
     try {
+      const user = (req as any).user;
+      const { ledgerEntries, ...journalEntryData } = req.body;
+
+      if (journalEntryData.date) {
+        journalEntryData.date = new Date(journalEntryData.date);
+      }
+      journalEntryData.createdBy = user?.id;
+
       const svc = getAccountingService();
-      const result = await svc.createJournalEntry(req.body);
+      const result = await svc.createJournalEntry(
+        journalEntryData,
+        ledgerEntries,
+      );
       res.status(201).json({ success: true, data: result });
     } catch (error: any) {
       if (
@@ -143,20 +154,22 @@ app.get(
     try {
       const { id } = req.params;
       const { asOfDate } = req.query;
+      const resolvedDate = asOfDate ? new Date(asOfDate as string) : new Date();
       const svc = getAccountingService();
-      const result = await svc.getAccountBalance(
-        id,
-        asOfDate ? new Date(asOfDate as string) : new Date(),
-      );
-      if (!result) {
-        res.status(404).json({ success: false, error: "Account not found" });
-        return;
-      }
-      res.status(200).json({ success: true, data: result });
+      const balance = await svc.getAccountBalance(id, resolvedDate);
+      res.status(200).json({
+        success: true,
+        data: {
+          accountId: id,
+          balance,
+          asOfDate: resolvedDate.toISOString(),
+        },
+      });
     } catch (error: any) {
       if (
         error.name === "NotFoundError" ||
-        error.message?.includes("not found")
+        error.message?.includes("not found") ||
+        error.message?.includes("Account not found")
       ) {
         res.status(404).json({ success: false, error: error.message });
       } else {
@@ -169,23 +182,39 @@ app.get(
 );
 
 // GET /api/accounting/financial-metrics
+// Calls accounting service for income statement + balance sheet, then analytics for metrics
 app.get(
   "/api/accounting/financial-metrics",
   authenticate,
   async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = req.query;
-      if (!startDate || !endDate) {
+      if (
+        !startDate ||
+        !endDate ||
+        isNaN(Date.parse(startDate as string)) ||
+        isNaN(Date.parse(endDate as string))
+      ) {
         res.status(400).json({
           success: false,
           error: "startDate and endDate are required",
         });
         return;
       }
-      const svc = getAnalyticsService();
-      const result = await svc.calculateFinancialMetrics(
-        new Date(startDate as string),
-        new Date(endDate as string),
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+
+      const accountingSvc = getAccountingService();
+      const analyticsSvc = getAnalyticsService();
+
+      const incomeStatement = await accountingSvc.generateIncomeStatement(
+        start,
+        end,
+      );
+      const balanceSheet = await accountingSvc.generateBalanceSheet(end);
+      const result = await analyticsSvc.calculateFinancialMetrics(
+        incomeStatement,
+        balanceSheet,
       );
       res.status(200).json({ success: true, data: result });
     } catch (error: any) {

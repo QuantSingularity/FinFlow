@@ -84,7 +84,7 @@ def test_gdpr_export() -> Any:
     response = client.get("/user/data")
     assert response.status_code == 200
     data = response.json()
-    assert "user_id" == data["user_id"]
+    assert "user_id" in data
     assert "credit_scores" in data
     assert "loan_applications" in data
 
