@@ -177,13 +177,55 @@ app.get(
 );
 
 // POST /api/analytics/custom-report
+const VALID_METRICS = [
+  "REVENUE",
+  "EXPENSES",
+  "PROFIT_MARGIN",
+  "CASH_FLOW",
+  "ACCOUNTS_RECEIVABLE",
+  "ACCOUNTS_PAYABLE",
+];
+const VALID_GROUP_BY = ["DAY", "WEEK", "MONTH", "QUARTER", "YEAR"];
+
 app.post(
   "/api/analytics/custom-report",
   authenticate,
   async (req: Request, res: Response) => {
     try {
+      const body = { ...req.body };
+
+      // Validate metrics if provided
+      if (body.metrics && Array.isArray(body.metrics)) {
+        const invalidMetrics = body.metrics.filter(
+          (m: string) => !VALID_METRICS.includes(m),
+        );
+        if (invalidMetrics.length > 0) {
+          res
+            .status(400)
+            .json({
+              success: false,
+              error: `Invalid metrics: ${invalidMetrics.join(", ")}`,
+            });
+          return;
+        }
+      }
+
+      // Validate groupBy if provided
+      if (body.groupBy && !VALID_GROUP_BY.includes(body.groupBy)) {
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: `Invalid groupBy value: ${body.groupBy}`,
+          });
+        return;
+      }
+
+      if (body.startDate) body.startDate = new Date(body.startDate);
+      if (body.endDate) body.endDate = new Date(body.endDate);
+
       const svc = getAnalyticsService();
-      const result = await svc.generateCustomReport(req.body);
+      const result = await svc.generateCustomReport(body);
       res.status(200).json({ success: true, data: result });
     } catch (error: any) {
       if (

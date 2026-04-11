@@ -41,6 +41,26 @@ const authenticate = (
 // Auth routes
 app.post("/api/auth/register", async (req: Request, res: Response) => {
   try {
+    const { email, password } = req.body;
+    // Basic input validation
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res
+        .status(400)
+        .json({
+          success: false,
+          error: "Please provide a valid email address",
+        });
+      return;
+    }
+    if (!password || password.length < 8) {
+      res
+        .status(400)
+        .json({
+          success: false,
+          error: "Password must be at least 8 characters long",
+        });
+      return;
+    }
     const result = await authService.register({
       ...req.body,
       ipAddress: req.ip,

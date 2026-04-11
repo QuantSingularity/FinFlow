@@ -1,4 +1,9 @@
-import { AccountType } from "@prisma/client";
+export type AccountType =
+  | "ASSET"
+  | "LIABILITY"
+  | "EQUITY"
+  | "REVENUE"
+  | "EXPENSE";
 
 export interface Account {
   id: string;

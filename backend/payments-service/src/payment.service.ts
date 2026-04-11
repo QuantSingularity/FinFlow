@@ -1,8 +1,8 @@
-import { PaymentStatus } from "@prisma/client";
 import paymentModel from "./models/payment.model";
 import { sendMessage } from "../../common/kafka";
 import {
   Payment,
+  PaymentStatus,
   PaymentCreateInput,
   PaymentUpdateInput,
   ChargeInput,

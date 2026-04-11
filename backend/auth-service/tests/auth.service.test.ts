@@ -470,7 +470,10 @@ describe("AuthService", () => {
           ipAddress: refreshTokenDto.ipAddress,
         },
       });
-      expect(result).toEqual({ accessToken: newAccessToken });
+      expect(result).toEqual({
+        accessToken: newAccessToken,
+        refreshToken: newAccessToken,
+      });
     });
 
     test("should fail with invalid refresh token", async () => {
@@ -705,6 +708,47 @@ describe("AuthService", () => {
 
       expect(hashPassword).not.toHaveBeenCalled();
       expect(userService.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("validatePasswordStrength (edge cases)", () => {
+    test("should reject password missing uppercase letter", async () => {
+      const registerDto = {
+        email: "test@example.com",
+        password: "weakpass1!",
+        firstName: "Test",
+        lastName: "User",
+        ipAddress: "127.0.0.1",
+      };
+      await expect(authService.register(registerDto)).rejects.toThrow(
+        "Password must contain at least one uppercase letter",
+      );
+    });
+
+    test("should reject password missing special character", async () => {
+      const registerDto = {
+        email: "test@example.com",
+        password: "WeakPass1",
+        firstName: "Test",
+        lastName: "User",
+        ipAddress: "127.0.0.1",
+      };
+      await expect(authService.register(registerDto)).rejects.toThrow(
+        "Password must contain at least one special character",
+      );
+    });
+
+    test("should reject password missing number", async () => {
+      const registerDto = {
+        email: "test@example.com",
+        password: "WeakPass!",
+        firstName: "Test",
+        lastName: "User",
+        ipAddress: "127.0.0.1",
+      };
+      await expect(authService.register(registerDto)).rejects.toThrow(
+        "Password must contain at least one number",
+      );
     });
   });
 });

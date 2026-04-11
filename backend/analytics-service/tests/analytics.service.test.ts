@@ -488,4 +488,65 @@ describe("AnalyticsService", () => {
       expect(logger.error).toHaveBeenCalled();
     });
   });
+
+  describe("getDashboardMetrics", () => {
+    test("should return dashboard metrics", async () => {
+      const result = await analyticsService.getDashboardMetrics();
+      expect(result).toEqual(
+        expect.objectContaining({
+          totalRevenue: expect.any(Number),
+          totalExpenses: expect.any(Number),
+          netIncome: expect.any(Number),
+          activeUsers: expect.any(Number),
+          pendingPayments: expect.any(Number),
+          updatedAt: expect.any(Date),
+        }),
+      );
+    });
+  });
+
+  describe("generateCustomReport", () => {
+    test("should generate custom report with valid config", async () => {
+      const reportConfig = { reportType: "REVENUE_SUMMARY" };
+      const result = await analyticsService.generateCustomReport(reportConfig);
+      expect(result).toEqual(
+        expect.objectContaining({
+          reportId: expect.any(String),
+          reportType: "REVENUE_SUMMARY",
+          generatedAt: expect.any(Date),
+        }),
+      );
+    });
+
+    test("should throw ValidationError when reportType is missing", async () => {
+      await expect(analyticsService.generateCustomReport({})).rejects.toThrow(
+        "Invalid report configuration: reportType is required",
+      );
+    });
+
+    test("should throw ValidationError when config is null", async () => {
+      await expect(analyticsService.generateCustomReport(null)).rejects.toThrow(
+        "Invalid report configuration: reportType is required",
+      );
+    });
+  });
+
+  describe("getPaymentAnalytics", () => {
+    test("should return payment analytics for date range", async () => {
+      const startDate = new Date("2025-01-01");
+      const endDate = new Date("2025-05-31");
+      const result = await analyticsService.getPaymentAnalytics(
+        startDate,
+        endDate,
+      );
+      expect(result).toEqual(
+        expect.objectContaining({
+          startDate,
+          endDate,
+          totalPayments: expect.any(Number),
+          successRate: expect.any(Number),
+        }),
+      );
+    });
+  });
 });

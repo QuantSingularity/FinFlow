@@ -229,4 +229,36 @@ describe("PaymentService", () => {
       expect(result).toEqual(mockPayments);
     });
   });
+
+  describe("getAvailableProcessors", () => {
+    test("should return list of processor names", () => {
+      (paymentProcessorFactory.getAllProcessors as jest.Mock).mockReturnValue([
+        mockProcessor,
+      ]);
+      const result = paymentService.getAvailableProcessors();
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toContain("stripe");
+    });
+  });
+
+  describe("findById", () => {
+    test("should return payment by id", async () => {
+      const paymentModel = require("../src/models/payment.model").default;
+      const mockPayment = {
+        id: "payment_123",
+        userId: "user_123",
+        amount: 100,
+      };
+      paymentModel.findById = jest.fn().mockResolvedValue(mockPayment);
+      const result = await paymentService.findById("payment_123");
+      expect(result).toEqual(mockPayment);
+    });
+
+    test("should return null when payment not found", async () => {
+      const paymentModel = require("../src/models/payment.model").default;
+      paymentModel.findById = jest.fn().mockResolvedValue(null);
+      const result = await paymentService.findById("nonexistent");
+      expect(result).toBeNull();
+    });
+  });
 });

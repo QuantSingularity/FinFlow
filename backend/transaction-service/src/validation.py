@@ -16,6 +16,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _coerce_errors(errors: list) -> list:
+    """Coerce raw dict errors into ValidationError objects."""
+    result = []
+    for e in errors:
+        if isinstance(e, dict):
+            result.append(ValidationError(
+                code=e.get("code", "UNKNOWN"),
+                message=e.get("message", ""),
+                field=e.get("field"),
+            ))
+        else:
+            result.append(e)
+    return result
+
+
 class TransactionValidator:
     """
     Comprehensive transaction validation service that performs multiple validation checks
@@ -100,37 +115,37 @@ class TransactionValidator:
             transaction
         )
         validation_checks["amount_valid"] = amount_valid
-        errors.extend(amount_errors)
+        errors.extend(_coerce_errors(amount_errors))
         warnings.extend(amount_warnings)
         accounts_valid, account_errors, account_warnings = self._validate_accounts(
             transaction
         )
         validation_checks["accounts_valid"] = accounts_valid
-        errors.extend(account_errors)
+        errors.extend(_coerce_errors(account_errors))
         warnings.extend(account_warnings)
         velocity_valid, velocity_errors, velocity_warnings = (
             self._validate_transaction_velocity(transaction, context)
         )
         validation_checks["velocity_valid"] = velocity_valid
-        errors.extend(velocity_errors)
+        errors.extend(_coerce_errors(velocity_errors))
         warnings.extend(velocity_warnings)
         business_rules_valid, business_errors, business_warnings = (
             self._validate_business_rules(transaction)
         )
         validation_checks["business_rules_valid"] = business_rules_valid
-        errors.extend(business_errors)
+        errors.extend(_coerce_errors(business_errors))
         warnings.extend(business_warnings)
         aml_valid, aml_errors, aml_warnings = self._validate_aml_cft(
             transaction, context
         )
         validation_checks["aml_cft_valid"] = aml_valid
-        errors.extend(aml_errors)
+        errors.extend(_coerce_errors(aml_errors))
         warnings.extend(aml_warnings)
         fraud_valid, fraud_errors, fraud_warnings = self._detect_fraud_patterns(
             transaction, context
         )
         validation_checks["fraud_detection_valid"] = fraud_valid
-        errors.extend(fraud_errors)
+        errors.extend(_coerce_errors(fraud_errors))
         warnings.extend(fraud_warnings)
         risk_score = self._calculate_risk_score(transaction, validation_checks, context)
         risk_level = self._determine_risk_level(risk_score)

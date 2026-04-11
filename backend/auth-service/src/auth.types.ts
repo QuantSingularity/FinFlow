@@ -1,5 +1,3 @@
-import { Role } from "@prisma/client";
-
 export enum OAuthProviderType {
   GOOGLE = "GOOGLE",
   GITHUB = "GITHUB",
@@ -9,7 +7,7 @@ export enum OAuthProviderType {
 export interface UserPayload {
   id: string;
   email: string;
-  role: Role;
+  role: string;
 }
 
 export interface TokenPayload {

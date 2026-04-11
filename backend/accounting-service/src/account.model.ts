@@ -1,4 +1,5 @@
-import { PrismaClient, AccountType } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+import { AccountType } from "./types/account.types";
 import {
   Account,
   AccountCreateInput,

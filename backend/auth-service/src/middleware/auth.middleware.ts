@@ -1,7 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import passport from "passport";
-import { Role } from "@prisma/client";
-
 // Authentication middleware using JWT
 export const authenticate = (
   req: Request,
@@ -26,7 +24,7 @@ export const authenticate = (
 };
 
 // Role-based authorization middleware
-export const authorize = (roles: Role[]) => {
+export const authorize = (roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       return res
@@ -34,7 +32,7 @@ export const authorize = (roles: Role[]) => {
         .json({ message: "Unauthorized: Authentication required" });
     }
 
-    if (!roles.includes(req.user.role as Role)) {
+    if (!roles.includes(req.user.role as string)) {
       return res
         .status(403)
         .json({ message: "Forbidden: Insufficient permissions" });
@@ -56,7 +54,7 @@ export const authorizeAdmin = (
       .json({ message: "Unauthorized: Authentication required" });
   }
 
-  if (req.user.role !== Role.ADMIN) {
+  if (req.user.role !== "ADMIN") {
     return res
       .status(403)
       .json({ message: "Forbidden: Admin access required" });

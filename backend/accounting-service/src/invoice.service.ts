@@ -6,7 +6,7 @@ import {
 } from "./invoice.types";
 import { sendMessage } from "../../common/kafka";
 import { logger } from "../../common/logger";
-import { InvoiceStatus } from "@prisma/client";
+import { InvoiceStatus } from "./invoice.types";
 
 class InvoiceService {
   // Find invoice by ID

@@ -69,7 +69,6 @@
     "moment": "^2.29.4",
     "mongodb": "^5.7.0",
     "mongoose": "^7.4.3",
-    "msgpack": "^1.0.3",
     "multer": "^1.4.5-lts.1",
     "node-cache": "^5.1.2",
     "node-cron": "^3.0.2",
@@ -105,8 +104,7 @@
     "uuid": "^9.0.0",
     "winston": "^3.10.0",
     "ws": "^8.13.0",
-    "xml2js": "^0.6.2",
-    "zlib": "^1.0.5"
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/archiver": "^5.3.2",

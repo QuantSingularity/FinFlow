@@ -1,4 +1,11 @@
-import { PaymentStatus } from "@prisma/client";
+export enum PaymentStatus {
+  PENDING = "PENDING",
+  PROCESSING = "PROCESSING",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED",
+  REFUNDED = "REFUNDED",
+  CANCELLED = "CANCELLED",
+}
 
 export enum ProcessorType {
   STRIPE = "stripe",

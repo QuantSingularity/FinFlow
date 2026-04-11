@@ -674,4 +674,94 @@ describe("AccountingService", () => {
       expect(ledgerEntryModel.getAccountBalanceByDate).not.toHaveBeenCalled();
     });
   });
+
+  describe("generateBalanceSheet", () => {
+    test("should generate balance sheet correctly", async () => {
+      const asOfDate = new Date("2025-05-31");
+      const mockAssetAccounts = [
+        {
+          id: "account_1",
+          name: "Cash",
+          accountCode: "1000",
+          accountType: "ASSET",
+        },
+      ];
+      const mockLiabilityAccounts = [
+        {
+          id: "account_2",
+          name: "Accounts Payable",
+          accountCode: "2000",
+          accountType: "LIABILITY",
+        },
+      ];
+      const mockEquityAccounts = [
+        {
+          id: "account_3",
+          name: "Common Stock",
+          accountCode: "3000",
+          accountType: "EQUITY",
+        },
+      ];
+
+      (accountModel.findByType as jest.Mock).mockImplementation(
+        (type: string) => {
+          if (type === "ASSET") return Promise.resolve(mockAssetAccounts);
+          if (type === "LIABILITY")
+            return Promise.resolve(mockLiabilityAccounts);
+          if (type === "EQUITY") return Promise.resolve(mockEquityAccounts);
+          return Promise.resolve([]);
+        },
+      );
+      (accountModel.findById as jest.Mock).mockImplementation((id: string) => {
+        const all = [
+          ...mockAssetAccounts,
+          ...mockLiabilityAccounts,
+          ...mockEquityAccounts,
+        ];
+        return Promise.resolve(all.find((a) => a.id === id) || null);
+      });
+      (ledgerEntryModel.getAccountBalanceByDate as jest.Mock).mockResolvedValue(
+        {
+          accountId: "any",
+          totalDebit: 5000,
+          totalCredit: 2000,
+        },
+      );
+
+      const result = await accountingService.generateBalanceSheet(asOfDate);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          asOfDate,
+          assetItems: expect.any(Array),
+          liabilityItems: expect.any(Array),
+          equityItems: expect.any(Array),
+          totalAssets: expect.any(Number),
+          totalLiabilities: expect.any(Number),
+          totalEquity: expect.any(Number),
+          totalLiabilitiesAndEquity: expect.any(Number),
+        }),
+      );
+    });
+  });
+
+  describe("generateCashFlowStatement", () => {
+    test("should throw error when no cash accounts found", async () => {
+      const startDate = new Date("2025-01-01");
+      const endDate = new Date("2025-05-31");
+
+      (accountModel.findByType as jest.Mock).mockResolvedValue([
+        {
+          id: "account_1",
+          name: "Revenue",
+          accountCode: "400",
+          accountType: "ASSET",
+        },
+      ]);
+
+      await expect(
+        accountingService.generateCashFlowStatement(startDate, endDate),
+      ).rejects.toThrow("No cash accounts found");
+    });
+  });
 });

@@ -243,12 +243,21 @@ class AnalyticsService {
     const currentRatio =
       currentLiabilities > 0 ? currentAssets / currentLiabilities : 0;
 
+    const inventory = (balanceSheet.assetItems || [])
+      .filter((item: any) => String(item.accountCode || "").startsWith("12"))
+      .reduce((sum: number, item: any) => sum + item.amount, 0);
+    const quickRatio =
+      currentLiabilities > 0
+        ? (currentAssets - inventory) / currentLiabilities
+        : 0;
+
     return {
       returnOnAssets,
       returnOnEquity,
       profitMargin,
       debtToEquityRatio,
       currentRatio,
+      quickRatio,
       calculatedLocally: true,
     };
   }
