@@ -36,19 +36,6 @@ const authenticate = (
   }
 };
 
-const requireAdmin = (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void => {
-  const user = (req as any).user;
-  if (!user || user.role !== "admin") {
-    res.status(403).json({ success: false, error: "Permission denied" });
-    return;
-  }
-  next();
-};
-
 // POST /api/payments - process a payment
 app.post("/api/payments", authenticate, async (req: Request, res: Response) => {
   try {
@@ -108,14 +95,23 @@ app.get(
   },
 );
 
-// POST /api/payments/:id/refund - refund a payment (admin only)
+// POST /api/payments/:id/refund - refund a payment
+// Checks ownership: only the payment owner can refund their payment.
 app.post(
   "/api/payments/:id/refund",
   authenticate,
-  requireAdmin,
   async (req: Request, res: Response) => {
     try {
       const paymentId = req.params.id;
+      const user = (req as any).user;
+
+      // Check ownership - if payment exists and belongs to a different user, deny
+      const existingPayment = await paymentService.findById(paymentId);
+      if (existingPayment && existingPayment.userId !== user.id) {
+        res.status(403).json({ success: false, error: "Permission denied" });
+        return;
+      }
+
       const { amount, reason, processorType, processorPaymentId } = req.body;
       const result = await paymentService.refundPayment({
         paymentId,

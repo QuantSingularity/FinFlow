@@ -9,7 +9,7 @@ import {
   RefundInput,
   ProcessorType,
 } from "./types/payment.types";
-import logger from "./utils/logger";
+import { logger } from "./utils/logger";
 import paymentProcessorFactory from "./factories/payment-processor.factory";
 
 class PaymentService {

@@ -200,9 +200,16 @@ app.put(
         .status(200)
         .json({ success: true, message: "Password changed successfully" });
     } catch (error: any) {
-      if (error.name === "UnauthorizedError") {
+      if (
+        error.name === "UnauthorizedError" ||
+        error.message === "Current password is incorrect"
+      ) {
         res.status(401).json({ success: false, error: error.message });
-      } else if (error.name === "BadRequestError") {
+      } else if (
+        error.name === "BadRequestError" ||
+        error.message?.includes("Password must") ||
+        error.message?.includes("characters long")
+      ) {
         res.status(400).json({ success: false, error: error.message });
       } else {
         res

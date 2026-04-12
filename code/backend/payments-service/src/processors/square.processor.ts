@@ -19,7 +19,10 @@ export class SquareProcessor implements PaymentProcessorInterface {
     const accessToken = process.env.SQUARE_ACCESS_TOKEN || "";
     this.locationId = process.env.SQUARE_LOCATION_ID || "";
 
-    if (!accessToken || !this.locationId) {
+    if (
+      (!accessToken || !this.locationId) &&
+      process.env.NODE_ENV === "production"
+    ) {
       throw new Error(
         "SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID environment variables are required",
       );

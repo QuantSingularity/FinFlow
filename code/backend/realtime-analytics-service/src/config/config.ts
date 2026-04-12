@@ -1,14 +1,11 @@
 import dotenv from "dotenv";
-import logger from "../../../common/logger";
 
 dotenv.config();
 
 export const config = {
-  // Server configuration
   port: parseInt(process.env.REALTIME_ANALYTICS_PORT || "3008", 10),
   nodeEnv: process.env.NODE_ENV || "development",
 
-  // Database configuration
   database: {
     postgres: {
       host: process.env.POSTGRES_HOST || "localhost",
@@ -43,13 +40,10 @@ export const config = {
           process.env.MONGODB_SOCKET_TIMEOUT || "45000",
           10,
         ),
-        bufferMaxEntries: 0,
-        bufferCommands: false,
       },
     },
   },
 
-  // Redis configuration
   redis: {
     host: process.env.REDIS_HOST || "localhost",
     port: parseInt(process.env.REDIS_PORT || "6379", 10),
@@ -59,11 +53,9 @@ export const config = {
     maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES || "3", 10),
     retryDelayOnFailover: parseInt(process.env.REDIS_RETRY_DELAY || "100", 10),
     enableReadyCheck: true,
-    maxRetriesPerRequest: 3,
     lazyConnect: true,
   },
 
-  // Kafka configuration
   kafka: {
     clientId: process.env.KAFKA_CLIENT_ID || "realtime-analytics-service",
     brokers: process.env.KAFKA_BROKERS?.split(",") || ["localhost:9092"],
@@ -110,7 +102,6 @@ export const config = {
     },
   },
 
-  // JWT configuration
   jwt: {
     secret: process.env.JWT_SECRET || "your-super-secret-jwt-key",
     expiresIn: process.env.JWT_EXPIRES_IN || "24h",
@@ -118,43 +109,36 @@ export const config = {
     audience: process.env.JWT_AUDIENCE || "finflow-users",
   },
 
-  // Rate limiting
   rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10), // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10), // limit each IP to 100 requests per windowMs
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10),
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
     message: "Too many requests from this IP, please try again later.",
     standardHeaders: true,
     legacyHeaders: false,
   },
 
-  // Analytics configuration
   analytics: {
     batchSize: parseInt(process.env.ANALYTICS_BATCH_SIZE || "1000", 10),
-    flushInterval: parseInt(process.env.ANALYTICS_FLUSH_INTERVAL || "5000", 10), // 5 seconds
+    flushInterval: parseInt(process.env.ANALYTICS_FLUSH_INTERVAL || "5000", 10),
     retentionDays: parseInt(process.env.ANALYTICS_RETENTION_DAYS || "90", 10),
     aggregationIntervals: {
-      realtime: parseInt(process.env.ANALYTICS_REALTIME_INTERVAL || "1000", 10), // 1 second
-      minute: parseInt(process.env.ANALYTICS_MINUTE_INTERVAL || "60000", 10), // 1 minute
-      hour: parseInt(process.env.ANALYTICS_HOUR_INTERVAL || "3600000", 10), // 1 hour
-      day: parseInt(process.env.ANALYTICS_DAY_INTERVAL || "86400000", 10), // 1 day
+      realtime: parseInt(process.env.ANALYTICS_REALTIME_INTERVAL || "1000", 10),
+      minute: parseInt(process.env.ANALYTICS_MINUTE_INTERVAL || "60000", 10),
+      hour: parseInt(process.env.ANALYTICS_HOUR_INTERVAL || "3600000", 10),
+      day: parseInt(process.env.ANALYTICS_DAY_INTERVAL || "86400000", 10),
     },
   },
 
-  // Anomaly detection configuration
   anomalyDetection: {
     enabled: process.env.ANOMALY_DETECTION_ENABLED !== "false",
-    sensitivity: parseFloat(process.env.ANOMALY_SENSITIVITY || "0.95"), // 95% confidence
-    windowSize: parseInt(process.env.ANOMALY_WINDOW_SIZE || "100", 10), // Number of data points
+    sensitivity: parseFloat(process.env.ANOMALY_SENSITIVITY || "0.95"),
+    windowSize: parseInt(process.env.ANOMALY_WINDOW_SIZE || "100", 10),
     minDataPoints: parseInt(process.env.ANOMALY_MIN_DATA_POINTS || "50", 10),
-    alertThreshold: parseFloat(
-      process.env.ANOMALY_ALERT_THRESHOLD || "0.8",
-      10,
-    ),
+    alertThreshold: parseFloat(process.env.ANOMALY_ALERT_THRESHOLD || "0.8"),
     models: {
       isolationForest: {
         contamination: parseFloat(
           process.env.ISOLATION_FOREST_CONTAMINATION || "0.1",
-          10,
         ),
         nEstimators: parseInt(
           process.env.ISOLATION_FOREST_N_ESTIMATORS || "100",
@@ -166,7 +150,7 @@ export const config = {
         ),
       },
       statisticalThreshold: {
-        zScoreThreshold: parseFloat(process.env.Z_SCORE_THRESHOLD || "3.0", 10),
+        zScoreThreshold: parseFloat(process.env.Z_SCORE_THRESHOLD || "3.0"),
         movingAverageWindow: parseInt(
           process.env.MOVING_AVERAGE_WINDOW || "20",
           10,
@@ -175,14 +159,13 @@ export const config = {
     },
   },
 
-  // Monitoring and metrics
   monitoring: {
     metricsEnabled: process.env.METRICS_ENABLED !== "false",
     metricsPort: parseInt(process.env.METRICS_PORT || "9090", 10),
     healthCheckInterval: parseInt(
       process.env.HEALTH_CHECK_INTERVAL || "30000",
       10,
-    ), // 30 seconds
+    ),
     alerting: {
       enabled: process.env.ALERTING_ENABLED !== "false",
       webhookUrl: process.env.ALERT_WEBHOOK_URL,
@@ -191,7 +174,6 @@ export const config = {
     },
   },
 
-  // Logging configuration
   logging: {
     level: process.env.LOG_LEVEL || "info",
     format: process.env.LOG_FORMAT || "json",
@@ -200,12 +182,11 @@ export const config = {
     datePattern: process.env.LOG_DATE_PATTERN || "YYYY-MM-DD",
   },
 
-  // WebSocket configuration
   websocket: {
     pingTimeout: parseInt(process.env.WS_PING_TIMEOUT || "60000", 10),
     pingInterval: parseInt(process.env.WS_PING_INTERVAL || "25000", 10),
     maxHttpBufferSize: parseInt(
-      process.env.WS_MAX_HTTP_BUFFER_SIZE || "1e6",
+      process.env.WS_MAX_HTTP_BUFFER_SIZE || "1000000",
       10,
     ),
     transports: process.env.WS_TRANSPORTS?.split(",") || [
@@ -215,7 +196,6 @@ export const config = {
     allowEIO3: process.env.WS_ALLOW_EIO3 === "true",
   },
 
-  // Security configuration
   security: {
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
     sessionSecret: process.env.SESSION_SECRET || "your-session-secret",
@@ -227,24 +207,5 @@ export const config = {
       process.env.RATE_LIMIT_SKIP_SUCCESSFUL === "true",
   },
 };
-
-// Validate required environment variables
-const requiredEnvVars = [
-  "POSTGRES_HOST",
-  "POSTGRES_USER",
-  "POSTGRES_PASSWORD",
-  "POSTGRES_DB",
-  "MONGODB_URI",
-  "REDIS_HOST",
-  "KAFKA_BROKERS",
-  "JWT_SECRET",
-];
-
-const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
-
-if (missingEnvVars.length > 0) {
-  logger.error("Missing required environment variables:", missingEnvVars);
-  process.exit(1);
-}
 
 export default config;

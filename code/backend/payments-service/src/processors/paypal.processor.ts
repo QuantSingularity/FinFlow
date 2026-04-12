@@ -24,7 +24,10 @@ export class PayPalProcessor implements PaymentProcessorInterface {
     this.baseUrl =
       process.env.PAYPAL_API_URL || "https://api-m.sandbox.paypal.com";
 
-    if (!this.clientId || !this.clientSecret) {
+    if (
+      (!this.clientId || !this.clientSecret) &&
+      process.env.NODE_ENV === "production"
+    ) {
       throw new Error(
         "PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables are required",
       );

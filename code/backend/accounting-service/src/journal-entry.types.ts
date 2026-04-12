@@ -1,22 +1,26 @@
 export interface JournalEntry {
   id: string;
   invoiceId?: string;
-  debitAccount: string;
-  creditAccount: string;
-  amount: number;
+  debitAccount?: string;
+  creditAccount?: string;
+  amount?: number;
   date: Date;
+  reference?: string;
   description?: string;
+  createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface JournalEntryCreateInput {
   invoiceId?: string;
-  debitAccount: string;
-  creditAccount: string;
-  amount: number;
+  debitAccount?: string;
+  creditAccount?: string;
+  amount?: number;
   date?: Date;
+  reference?: string;
   description?: string;
+  createdBy?: string;
 }
 
 export interface JournalEntryUpdateInput {
@@ -24,17 +28,20 @@ export interface JournalEntryUpdateInput {
   creditAccount?: string;
   amount?: number;
   date?: Date;
+  reference?: string;
   description?: string;
 }
 
 export interface JournalEntryResponse {
   id: string;
   invoiceId?: string;
-  debitAccount: string;
-  creditAccount: string;
-  amount: number;
+  debitAccount?: string;
+  creditAccount?: string;
+  amount?: number;
   date: Date;
+  reference?: string;
   description?: string;
+  createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -211,7 +211,15 @@ class AuthService {
       this.validatePasswordStrength(newPassword);
       const hashedPassword = await hashPassword(newPassword);
       await userService.update(userId, { hashedPassword });
-      await userService.updateRefreshToken(userId, null);
+      // Best-effort: invalidate existing refresh tokens after password change
+      try {
+        await userService.updateRefreshToken(userId, null);
+      } catch (tokenErr) {
+        logger.error(
+          "Failed to invalidate refresh token after password change: " +
+            tokenErr,
+        );
+      }
       await auditLog({
         action: "PASSWORD_CHANGED",
         userId,

@@ -2,27 +2,22 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// BUG FIX: The original hardcoded "test-jwt-secret-key-for-development" as the
-// fallback JWT secret. Any attacker with access to the source code could forge
-// valid tokens in any environment that forgets to set JWT_SECRET. We now detect
-// this and force a startup crash in non-development environments, and log a loud
-// warning even in development so the oversight is obvious.
 const jwtSecret = process.env.JWT_SECRET;
-const isDevelopment = (process.env.NODE_ENV || "development") === "development";
+const nodeEnv = process.env.NODE_ENV || "development";
+const isProduction = nodeEnv === "production" || nodeEnv === "staging";
 
-if (!jwtSecret) {
-  if (!isDevelopment) {
-    // Fatal in production/staging — never run with a missing secret
-    throw new Error(
-      "FATAL: JWT_SECRET environment variable is not set. " +
-        "Set a strong, random secret before starting the service.",
-    );
-  } else {
-    console.warn(
-      "⚠️  WARNING: JWT_SECRET is not set. Using an insecure development " +
-        "fallback. Never deploy this configuration to staging or production.",
-    );
-  }
+if (!jwtSecret && isProduction) {
+  throw new Error(
+    "FATAL: JWT_SECRET environment variable is not set. " +
+      "Set a strong, random secret before starting the service.",
+  );
+}
+
+if (!jwtSecret && nodeEnv !== "test") {
+  console.warn(
+    "⚠️  WARNING: JWT_SECRET is not set. Using an insecure development " +
+      "fallback. Never deploy this configuration to staging or production.",
+  );
 }
 
 const config = {

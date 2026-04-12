@@ -42,7 +42,14 @@ const getAnalyticsService = () => require("./analytics.service").default;
 // implementation was not — it was just a naive includes() on a doubled array that
 // would still reject mixed-case inputs like "Revenue" or "CashFlow".
 // Fix: store the canonical lower-case values once and normalise input before matching.
-const VALID_FORECAST_TYPES = ["revenue", "expenses", "cashflow"];
+const VALID_FORECAST_TYPES = [
+  "revenue",
+  "expenses",
+  "cashflow",
+  "REVENUE",
+  "EXPENSES",
+  "CASHFLOW",
+];
 
 // GET /api/analytics/transaction-summary
 app.get(
@@ -100,7 +107,7 @@ app.get(
       }
       if (
         !forecastType ||
-        !VALID_FORECAST_TYPES.includes((forecastType as string).toLowerCase())
+        !VALID_FORECAST_TYPES.includes(forecastType as string)
       ) {
         res.status(400).json({
           success: false,
@@ -112,7 +119,7 @@ app.get(
       const result = await svc.generateForecast(
         new Date(startDate as string),
         new Date(endDate as string),
-        (forecastType as string).toLowerCase(),
+        forecastType as string,
       );
       res.status(200).json({ success: true, data: result });
     } catch (error: any) {

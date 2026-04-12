@@ -16,7 +16,7 @@ export class StripeProcessor implements PaymentProcessorInterface {
 
   constructor() {
     const apiKey = process.env.STRIPE_SECRET || "";
-    if (!apiKey) {
+    if (!apiKey && process.env.NODE_ENV === "production") {
       throw new Error("STRIPE_SECRET environment variable is required");
     }
 

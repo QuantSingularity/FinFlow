@@ -20,3 +20,5 @@ export const logger = {
     commonLogger.debug(message, meta);
   },
 };
+
+export default logger;

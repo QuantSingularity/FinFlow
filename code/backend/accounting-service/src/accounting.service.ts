@@ -96,35 +96,37 @@ class AccountingService {
       let totalDebit = 0;
       let totalCredit = 0;
 
-      // BUG FIX: The original returned objects with keys {debit, credit, balance}
-      // but the declared TrialBalanceEntry type uses {debitBalance, creditBalance}.
-      // Also the wrapper key was "accounts" but TrialBalanceResponse declares "entries".
-      // Aligned to match the declared interface so TypeScript consumers are not broken.
-      const entries = accounts.map((account: any) => {
+      const accountEntries = accounts.map((account: any) => {
         const summary = (ledgerSummaries as any[]).find(
           (s: any) => s.accountId === account.id,
         ) || { totalDebit: 0, totalCredit: 0 };
 
-        const debitBalance = summary.totalDebit;
-        const creditBalance = summary.totalCredit;
+        const debit = summary.totalDebit || 0;
+        const credit = summary.totalCredit || 0;
+        // Balance: for asset/expense debit-normal accounts balance = debit - credit,
+        // for liability/equity/revenue credit-normal accounts balance = credit - debit
+        const accountType = account.accountType || account.type || "";
+        // Balance = debit - credit (positive = net debit, negative = net credit)
+        const balance = debit - credit;
 
-        totalDebit += debitBalance;
-        totalCredit += creditBalance;
+        totalDebit += debit;
+        totalCredit += credit;
 
         return {
-          accountId: account.id,
-          accountName: account.name,
+          id: account.id,
+          name: account.name,
           accountCode: account.accountCode || account.code,
-          accountType: account.accountType || account.type,
-          debitBalance,
-          creditBalance,
+          accountType,
+          debit,
+          credit,
+          balance,
         };
       });
 
       return {
-        entries,
-        totalDebits: totalDebit,
-        totalCredits: totalCredit,
+        accounts: accountEntries,
+        totalDebit,
+        totalCredit,
         isBalanced: Math.abs(totalDebit - totalCredit) <= 0.001,
       };
     } catch (error) {
