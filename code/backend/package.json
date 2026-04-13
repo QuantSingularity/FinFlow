@@ -42,7 +42,6 @@
     "compression": "^1.7.4",
     "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
-    "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-async-errors": "^3.1.1",
@@ -69,7 +68,7 @@
     "moment": "^2.29.4",
     "mongodb": "^5.7.0",
     "mongoose": "^7.4.3",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.0.0",
     "node-cache": "^5.1.2",
     "node-cron": "^3.0.2",
     "node-oauth2-server": "^2.4.0",
@@ -77,7 +76,7 @@
     "oauth2-server": "^3.1.1",
     "objection": "^3.1.1",
     "os": "^0.1.2",
-    "p-limit": "^4.0.0",
+    "p-limit": "3.1.0",
     "p-queue": "^7.4.1",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.1",
@@ -135,10 +134,17 @@
     "eslint": "^8.45.0",
     "jest": "^29.6.1",
     "prisma": "^5.0.0",
-    "supertest": "^6.3.3",
+    "supertest": "^7.1.3",
     "ts-jest": "^29.1.1"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "overrides": {
+    "p-limit": "3.1.0",
+    "yocto-queue": "0.1.0",
+    "send": {
+      "mime": "1.6.0"
+    }
   }
 }
