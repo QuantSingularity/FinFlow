@@ -11,23 +11,17 @@ const ApiError = class ApiError extends Error {
 
 const Client = jest.fn().mockImplementation(() => ({
   paymentsApi: {
-    createPayment: jest
-      .fn()
-      .mockResolvedValue({
-        result: { payment: { id: "sq_test_123", status: "COMPLETED" } },
-      }),
-    getPayment: jest
-      .fn()
-      .mockResolvedValue({
-        result: { payment: { id: "sq_test_123", status: "COMPLETED" } },
-      }),
+    createPayment: jest.fn().mockResolvedValue({
+      result: { payment: { id: "sq_test_123", status: "COMPLETED" } },
+    }),
+    getPayment: jest.fn().mockResolvedValue({
+      result: { payment: { id: "sq_test_123", status: "COMPLETED" } },
+    }),
   },
   refundsApi: {
-    refundPayment: jest
-      .fn()
-      .mockResolvedValue({
-        result: { refund: { id: "sq_refund_123", status: "COMPLETED" } },
-      }),
+    refundPayment: jest.fn().mockResolvedValue({
+      result: { refund: { id: "sq_refund_123", status: "COMPLETED" } },
+    }),
   },
   webhooksHelper: {
     isValidWebhookEventSignature: jest.fn().mockReturnValue(true),

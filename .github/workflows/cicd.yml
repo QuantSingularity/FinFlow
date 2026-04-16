@@ -14,9 +14,6 @@ jobs:
 
     env:
       BACKEND_DIR: code/backend
-      WEB_FRONTEND_DIR: web-frontend
-      MOBILE_FRONTEND_DIR: mobile-frontend
-      INFRASTRUCTURE_DIR: infrastructure
 
     steps:
       - name: Checkout repository
@@ -24,77 +21,46 @@ jobs:
         with:
           fetch-depth: 0
 
+      # ---------------------------------------------------------
+      # Node Setup & Backend Deps (for ESLint/Tests)
+      # ---------------------------------------------------------
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            tools/package-lock.json
-            code/backend/package-lock.json
-
-      - name: Install Node dependencies (tools)
-        working-directory: tools
-        run: npm ci
+          cache-dependency-path: code/backend/package-lock.json
 
       - name: Install backend dependencies
+        if: hashFiles('code/backend/package-lock.json') != ''
         working-directory: ${{ env.BACKEND_DIR }}
-        run: npm ci
+        run: npm install
 
       - name: Check backend TypeScript linting
         shell: bash
-        run: |
-          set -euo pipefail
-          if [ ! -d "${BACKEND_DIR}" ]; then
-            echo "Backend directory '${BACKEND_DIR}' not found — skipping TypeScript linting."
-            exit 0
-          fi
-          echo "=== Running ESLint across all workspaces ==="
-          npm run lint --workspaces --if-present
         working-directory: ${{ env.BACKEND_DIR }}
+        run: |
+          set -euo pipefail
+          echo "=== Running ESLint across backend workspaces ==="
+          npm run lint --workspaces --if-present
 
-      - name: Check web frontend formatting
+      # ---------------------------------------------------------
+      # Global Formatting (Replaces the deleted 'tools' logic)
+      # ---------------------------------------------------------
+      - name: Install Global Prettier & Solidity Plugin
+        run: npm install -g prettier prettier-plugin-solidity
+
+      - name: Run Global Prettier Check
         shell: bash
         run: |
           set -euo pipefail
-          if [ -d "${WEB_FRONTEND_DIR}" ]; then
-            echo "=== Running Prettier (web frontend) ==="
-            npx --prefix tools prettier --check "${WEB_FRONTEND_DIR}/**/*.{js,jsx,ts,tsx,json,html,css,md}" --ignore-path tools/.prettierrc
-          else
-            echo "Web frontend directory not found — skipping."
-          fi
-
-      - name: Check mobile frontend formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -d "${MOBILE_FRONTEND_DIR}" ]; then
-            echo "=== Running Prettier (mobile frontend) ==="
-            npx --prefix tools prettier --check "${MOBILE_FRONTEND_DIR}/**/*.{js,jsx,ts,tsx,json,html,css,md}" --ignore-path tools/.prettierrc
-          else
-            echo "Mobile frontend directory not found — skipping."
-          fi
-
-      - name: Check markdown formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "=== Running Prettier (all markdown files) ==="
-          npx --prefix tools prettier --check "**/*.md" --ignore-path tools/.prettierrc
-
-      - name: Check infrastructure YAML formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -d "${INFRASTRUCTURE_DIR}" ]; then
-            echo "=== Running Prettier (infrastructure YAML/YML) ==="
-            npx --prefix tools prettier --check "${INFRASTRUCTURE_DIR}/**/*.{yml,yaml}" --ignore-path tools/.prettierrc
-          else
-            echo "Infrastructure directory not found — skipping."
-          fi
+          NODE_GLOBAL=$(npm root -g)
+          echo "=== Running Prettier check across entire repo ==="
+          prettier --plugin="$NODE_GLOBAL/prettier-plugin-solidity/dist/index.js" \
+            --check "**/*.{js,jsx,ts,tsx,json,html,css,md,sol,yml,yaml}"
 
       - name: Quality checks complete
-        run: echo "All formatting checks completed successfully."
+        run: echo "All formatting and linting checks completed successfully."
 
   backend_tests:
     name: Backend Tests
@@ -107,8 +73,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -119,7 +83,7 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: ${{ env.BACKEND_DIR }}
-        run: npm ci
+        run: npm install
 
       - name: Run backend test suite
         working-directory: ${{ env.BACKEND_DIR }}
@@ -136,8 +100,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage-reports
-          path: ${{ env.BACKEND_DIR }}/*/coverage/
+          path: |
+            ${{ env.BACKEND_DIR }}/**/coverage/
           retention-days: 30
-
-      - name: Backend tests complete
-        run: echo "All backend tests completed successfully."
