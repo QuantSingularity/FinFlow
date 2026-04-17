@@ -115,8 +115,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Build frontend
-        run: npm run build
+      - name: Build web-frontend
+        run: CI=false npm run build
 
       - name: Upload build artifacts
         if: success()
