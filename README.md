@@ -8,8 +8,6 @@
   <img src="docs/images/FinFlow_Dashboard.bmp" alt="FinFlow Dashboard" width="80%">
 </div>
 
-> **Note**: This project is under active development. Features and functionalities are continuously being enhanced to improve financial operations capabilities and user experience.
-
 ### Table of Contents
 
 - [Overview](#overview)
