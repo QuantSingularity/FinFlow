@@ -18,17 +18,19 @@ jest.mock("../src/payment.service");
 jest.mock("../../common/kafka", () => ({
   sendMessage: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock("jsonwebtoken");
+jest.mock("jsonwebtoken", () => ({
+  verify: jest.fn().mockReturnValue({ sub: "user_123", role: "admin" }),
+  sign: jest.fn().mockReturnValue("mock_access_token"),
+  decode: jest.fn().mockReturnValue({ sub: "user_123", role: "admin" }),
+}));
 
 describe("Payments API Integration Tests", () => {
   beforeEach(() => {
-    // Clear all mocks before each test
     jest.clearAllMocks();
-
-    // Default JWT verification mock
+    // Re-apply default after clearAllMocks (clearMocks:true in config clears implementations in some jest versions)
     (jwt.verify as jest.Mock).mockReturnValue({
       sub: "user_123",
-      role: "user",
+      role: "admin",
     });
   });
 
@@ -37,9 +39,10 @@ describe("Payments API Integration Tests", () => {
     jest.restoreAllMocks();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     // Clean up after all tests
     jest.resetModules();
+    await new Promise<void>((resolve) => setImmediate(resolve));
   });
 
   describe("POST /api/payments", () => {
@@ -264,6 +267,16 @@ describe("Payments API Integration Tests", () => {
       (jwt.verify as jest.Mock).mockReturnValue({
         sub: "different_user",
         role: "user", // Not admin
+      });
+
+      // Mock findById to return a payment owned by user_123 (not different_user)
+      // This makes the ownership check in the route trigger the 403.
+      (paymentService.findById as jest.Mock).mockResolvedValue({
+        id: paymentId,
+        userId: "user_123",
+        amount: 100.0,
+        currency: "usd",
+        status: "COMPLETED",
       });
 
       // Act

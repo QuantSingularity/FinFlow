@@ -17,7 +17,10 @@ class AccountingService {
   async createJournalEntry(
     journalEntryData: JournalEntryCreateInput,
     ledgerEntries: LedgerEntryInput[],
-  ): Promise<{ journalEntry: any; ledgerEntries: any[] }> {
+  ): Promise<{
+    journalEntry: import("./journal-entry.types").JournalEntry;
+    ledgerEntries: import("./types/ledger-entry.types").LedgerEntry[];
+  }> {
     try {
       this.validateDoubleEntry(ledgerEntries);
 
@@ -72,14 +75,14 @@ class AccountingService {
         return [];
       }
 
-      const journalEntryIds = journalEntries.map((je: any) => je.id);
+      const journalEntryIds = journalEntries.map((je: { id: string }) => je.id);
       const allLedgerEntries =
         await ledgerEntryModel.findByJournalEntryIds(journalEntryIds);
 
-      return journalEntries.map((je: any) => ({
+      return journalEntries.map((je: Record<string, unknown>) => ({
         ...je,
         ledgerEntries: allLedgerEntries.filter(
-          (le: any) => le.journalEntryId === je.id,
+          (le: { journalEntryId: string }) => le.journalEntryId === je.id,
         ),
       }));
     } catch (error) {
@@ -96,32 +99,37 @@ class AccountingService {
       let totalDebit = 0;
       let totalCredit = 0;
 
-      const accountEntries = accounts.map((account: any) => {
-        const summary = (ledgerSummaries as any[]).find(
-          (s: any) => s.accountId === account.id,
-        ) || { totalDebit: 0, totalCredit: 0 };
+      const accountEntries = accounts.map(
+        (account: Record<string, unknown>) => {
+          const summary = (
+            ledgerSummaries as Array<Record<string, unknown>>
+          ).find((s: { accountId: string }) => s.accountId === account.id) || {
+            totalDebit: 0,
+            totalCredit: 0,
+          };
 
-        const debit = summary.totalDebit || 0;
-        const credit = summary.totalCredit || 0;
-        // Balance: for asset/expense debit-normal accounts balance = debit - credit,
-        // for liability/equity/revenue credit-normal accounts balance = credit - debit
-        const accountType = account.accountType || account.type || "";
-        // Balance = debit - credit (positive = net debit, negative = net credit)
-        const balance = debit - credit;
+          const debit = summary.totalDebit || 0;
+          const credit = summary.totalCredit || 0;
+          // Balance: for asset/expense debit-normal accounts balance = debit - credit,
+          // for liability/equity/revenue credit-normal accounts balance = credit - debit
+          const accountType = account.accountType || account.type || "";
+          // Balance = debit - credit (positive = net debit, negative = net credit)
+          const balance = debit - credit;
 
-        totalDebit += debit;
-        totalCredit += credit;
+          totalDebit += debit;
+          totalCredit += credit;
 
-        return {
-          id: account.id,
-          name: account.name,
-          accountCode: account.accountCode || account.code,
-          accountType,
-          debit,
-          credit,
-          balance,
-        };
-      });
+          return {
+            id: account.id,
+            name: account.name,
+            accountCode: account.accountCode || account.code,
+            accountType,
+            debit,
+            credit,
+            balance,
+          };
+        },
+      );
 
       return {
         accounts: accountEntries,
@@ -140,8 +148,12 @@ class AccountingService {
       const revenueAccounts = await accountModel.findByType("REVENUE");
       const expenseAccounts = await accountModel.findByType("EXPENSE");
 
-      const revenueAccountIds = revenueAccounts.map((a: any) => a.id);
-      const expenseAccountIds = expenseAccounts.map((a: any) => a.id);
+      const revenueAccountIds = revenueAccounts.map(
+        (a: { id: string }) => a.id,
+      );
+      const expenseAccountIds = expenseAccounts.map(
+        (a: { id: string }) => a.id,
+      );
 
       const revenueSummaries =
         await ledgerEntryModel.getAccountBalancesByDateRange(
@@ -157,38 +169,48 @@ class AccountingService {
           endDate,
         );
 
-      const revenueItems = revenueAccounts.map((account: any) => {
-        const summary = (revenueSummaries as any[]).find(
-          (s: any) => s.accountId === account.id,
-        ) || { totalDebit: 0, totalCredit: 0 };
-        const amount = summary.totalCredit - summary.totalDebit;
-        return {
-          accountId: account.id,
-          accountCode: account.accountCode || account.code,
-          name: account.name,
-          amount,
-        };
-      });
+      const revenueItems = revenueAccounts.map(
+        (account: Record<string, unknown>) => {
+          const summary = (
+            revenueSummaries as Array<Record<string, unknown>>
+          ).find((s: { accountId: string }) => s.accountId === account.id) || {
+            totalDebit: 0,
+            totalCredit: 0,
+          };
+          const amount = summary.totalCredit - summary.totalDebit;
+          return {
+            accountId: account.id,
+            accountCode: account.accountCode || account.code,
+            name: account.name,
+            amount,
+          };
+        },
+      );
 
-      const expenseItems = expenseAccounts.map((account: any) => {
-        const summary = (expenseSummaries as any[]).find(
-          (s: any) => s.accountId === account.id,
-        ) || { totalDebit: 0, totalCredit: 0 };
-        const amount = summary.totalDebit - summary.totalCredit;
-        return {
-          accountId: account.id,
-          accountCode: account.accountCode || account.code,
-          name: account.name,
-          amount,
-        };
-      });
+      const expenseItems = expenseAccounts.map(
+        (account: Record<string, unknown>) => {
+          const summary = (
+            expenseSummaries as Array<Record<string, unknown>>
+          ).find((s: { accountId: string }) => s.accountId === account.id) || {
+            totalDebit: 0,
+            totalCredit: 0,
+          };
+          const amount = summary.totalDebit - summary.totalCredit;
+          return {
+            accountId: account.id,
+            accountCode: account.accountCode || account.code,
+            name: account.name,
+            amount,
+          };
+        },
+      );
 
       const totalRevenue = revenueItems.reduce(
-        (sum: number, item: any) => sum + item.amount,
+        (sum: number, item: { amount: number }) => sum + item.amount,
         0,
       );
       const totalExpenses = expenseItems.reduce(
-        (sum: number, item: any) => sum + item.amount,
+        (sum: number, item: { amount: number }) => sum + item.amount,
         0,
       );
       const netIncome = totalRevenue - totalExpenses;
@@ -223,7 +245,9 @@ class AccountingService {
         asOfDate,
       );
 
-      const accountType = (account as any).accountType || (account as any).type;
+      const accountType =
+        ((account as Record<string, unknown>)["accountType"] as string) ||
+        ((account as Record<string, unknown>)["type"] as string);
 
       if (accountType === "ASSET" || accountType === "EXPENSE") {
         return ledgerSummary.totalDebit - ledgerSummary.totalCredit;
@@ -242,7 +266,7 @@ class AccountingService {
       const liabilityAccounts = await accountModel.findByType("LIABILITY");
       const equityAccounts = await accountModel.findByType("EQUITY");
 
-      const buildItems = async (accounts: any[]) => {
+      const buildItems = async (accounts: Array<Record<string, unknown>>) => {
         const items = [];
         let total = 0;
         for (const account of accounts) {
@@ -290,26 +314,28 @@ class AccountingService {
     try {
       const cashAccounts = await accountModel.findByType("ASSET");
       const cashAccountIds = cashAccounts
-        .filter((account: any) => {
+        .filter((account: Record<string, unknown>) => {
           const code = account.code || account.accountCode || "";
           return code.startsWith("101");
         })
-        .map((account: any) => account.id);
+        .map((account: Record<string, unknown>) => account["id"] as string);
 
       if (cashAccountIds.length === 0) {
         throw new Error("No cash accounts found");
       }
 
-      const cashFlows: any[] = [];
+      const cashFlows: Array<Record<string, unknown>> = [];
       let netCashFlow = 0;
 
       for (const accountId of cashAccountIds) {
         const ledgerEntries = await ledgerEntryModel.findByAccountId(accountId);
 
-        const filteredEntries = ledgerEntries.filter((entry: any) => {
-          const entryDate = new Date(entry.journalEntry.date);
-          return entryDate >= startDate && entryDate <= endDate;
-        });
+        const filteredEntries = ledgerEntries.filter(
+          (entry: Record<string, unknown>) => {
+            const entryDate = new Date(entry.journalEntry.date);
+            return entryDate >= startDate && entryDate <= endDate;
+          },
+        );
 
         for (const entry of filteredEntries) {
           const amount = entry.isCredit ? -entry.amount : entry.amount;
@@ -339,7 +365,7 @@ class AccountingService {
 
   private async publishAccountingEvent(
     eventType: string,
-    data: any,
+    data: Record<string, unknown>,
   ): Promise<void> {
     try {
       await sendMessage(`accounting_${eventType}`, {

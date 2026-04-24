@@ -17,7 +17,11 @@ import { auditLog } from "../src/utils/audit.utils";
 // Mock dependencies
 jest.mock("../src/auth.service");
 jest.mock("../src/user.service");
-jest.mock("jsonwebtoken");
+jest.mock("jsonwebtoken", () => ({
+  verify: jest.fn().mockReturnValue({ sub: "user_123", role: "admin" }),
+  sign: jest.fn().mockReturnValue("mock_access_token"),
+  decode: jest.fn().mockReturnValue({ sub: "user_123", role: "admin" }),
+}));
 jest.mock("../src/utils/audit.utils");
 jest.mock("../../common/kafka", () => ({
   sendMessage: jest.fn().mockResolvedValue(undefined),
@@ -25,8 +29,11 @@ jest.mock("../../common/kafka", () => ({
 
 describe("Auth API Integration Tests", () => {
   beforeEach(() => {
-    // Clear all mocks before each test
     jest.clearAllMocks();
+    (jwt.verify as jest.Mock).mockReturnValue({
+      sub: "user_123",
+      role: "admin",
+    });
   });
 
   afterEach(() => {
@@ -34,9 +41,10 @@ describe("Auth API Integration Tests", () => {
     jest.restoreAllMocks();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     // Clean up after all tests
     jest.resetModules();
+    await new Promise<void>((resolve) => setImmediate(resolve));
   });
 
   describe("POST /api/auth/register", () => {

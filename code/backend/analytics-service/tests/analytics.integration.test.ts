@@ -19,14 +19,19 @@ jest.mock("../src/forecast.model");
 jest.mock("../../common/kafka", () => ({
   sendMessage: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock("jsonwebtoken");
+// Explicit factory mock — more reliable than jest.mock("jsonwebtoken") + mockReturnValue
+// because clearMocks:true in jest.config.js would wipe auto-mock return values between tests.
+jest.mock("jsonwebtoken", () => ({
+  verify: jest.fn().mockReturnValue({ sub: "user_123", role: "user" }),
+  sign: jest.fn().mockReturnValue("mock_access_token"),
+  decode: jest.fn().mockReturnValue({ sub: "user_123", role: "user" }),
+}));
 
 describe("Analytics API Integration Tests", () => {
   beforeEach(() => {
-    // Clear all mocks before each test
+    // clearMocks: true in jest.config clears call history; re-apply return values here
+    // so individual tests can still override them via mockReturnValueOnce.
     jest.clearAllMocks();
-
-    // Default JWT verification mock
     (jwt.verify as jest.Mock).mockReturnValue({
       sub: "user_123",
       role: "user",
@@ -38,9 +43,10 @@ describe("Analytics API Integration Tests", () => {
     jest.restoreAllMocks();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     // Clean up after all tests
     jest.resetModules();
+    await new Promise<void>((resolve) => setImmediate(resolve));
   });
 
   describe("GET /api/analytics/transaction-summary", () => {

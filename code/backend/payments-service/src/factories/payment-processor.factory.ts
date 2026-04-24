@@ -71,8 +71,14 @@ class PaymentProcessorFactory {
    *
    * @returns Object with processor names as keys and their client configs as values
    */
-  getAllClientConfigs(): Record<string, Record<string, any>> {
-    const configs: Record<string, Record<string, any>> = {};
+  getAllClientConfigs(): Record<
+    string,
+    Record<string, string | number | boolean | null>
+  > {
+    const configs: Record<
+      string,
+      Record<string, string | number | boolean | null>
+    > = {};
 
     this.processors.forEach((processor, name) => {
       configs[name] = processor.getClientConfig();

@@ -22,6 +22,7 @@ module.exports = {
     ],
   },
   moduleNameMapper: {
+    "^mime$": "<rootDir>/../__mocks__/mime.js",
     "^@prisma/client$": "<rootDir>/../__mocks__/@prisma/client.js",
     "^square$": "<rootDir>/../__mocks__/square.js",
     "^\.\./\.\./(common/.*)$": "<rootDir>/../$1",

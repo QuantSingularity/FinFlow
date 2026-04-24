@@ -26,7 +26,7 @@ class AnalyticsService {
    * Generate transaction summary. Accepts either an array of transactions or (startDate, endDate).
    */
   async generateTransactionSummary(
-    transactionsOrStart: any,
+    transactionsOrStart: Date | Array<Record<string, unknown>>,
     endDate?: Date,
   ): Promise<any> {
     try {
@@ -63,8 +63,8 @@ class AnalyticsService {
    * Calculate financial metrics by posting to the analytics API.
    */
   async calculateFinancialMetrics(
-    incomeStatement: any,
-    balanceSheet: any,
+    incomeStatement: Record<string, unknown>,
+    balanceSheet: Record<string, unknown>,
   ): Promise<any> {
     try {
       const response = await axios.post(
@@ -82,7 +82,7 @@ class AnalyticsService {
    * Send accounting data to analytics service for processing.
    */
   async sendAccountingDataToAnalytics(
-    data: any,
+    data: Record<string, unknown>,
     dataType: string,
   ): Promise<void> {
     try {
@@ -181,7 +181,9 @@ class AnalyticsService {
     }
   }
 
-  async generateCustomReport(reportConfig: any): Promise<any> {
+  async generateCustomReport(
+    reportConfig: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
     if (!reportConfig || !reportConfig.reportType) {
       const err = new Error(
         "Invalid report configuration: reportType is required",
@@ -203,7 +205,9 @@ class AnalyticsService {
     }
   }
 
-  private calculateAverageGrowth(historicalData: any[]): number {
+  private calculateAverageGrowth(
+    historicalData: Array<Record<string, unknown>>,
+  ): number {
     if (!historicalData || historicalData.length < 2) return 0;
     let totalGrowth = 0;
     for (let i = 1; i < historicalData.length; i++) {
@@ -216,9 +220,9 @@ class AnalyticsService {
   }
 
   private calculateBasicFinancialMetrics(
-    incomeStatement: any,
-    balanceSheet: any,
-  ): any {
+    incomeStatement: Record<string, unknown>,
+    balanceSheet: Record<string, unknown>,
+  ): Record<string, unknown> {
     const netIncome = incomeStatement.netIncome || 0;
     const totalAssets = balanceSheet.totalAssets || 0;
     const totalLiabilities = balanceSheet.totalLiabilities || 0;
@@ -235,17 +239,35 @@ class AnalyticsService {
       totalEquity > 0 ? totalLiabilities / totalEquity : 0;
 
     const currentAssets = (balanceSheet.assetItems || [])
-      .filter((item: any) => String(item.accountCode || "").startsWith("1"))
-      .reduce((sum: number, item: any) => sum + item.amount, 0);
+      .filter((item: Record<string, unknown>) =>
+        String(item["accountCode"] || "").startsWith("1"),
+      )
+      .reduce(
+        (sum: number, item: Record<string, unknown>) =>
+          sum + ((item["amount"] as number) ?? 0),
+        0,
+      );
     const currentLiabilities = (balanceSheet.liabilityItems || [])
-      .filter((item: any) => String(item.accountCode || "").startsWith("2"))
-      .reduce((sum: number, item: any) => sum + item.amount, 0);
+      .filter((item: Record<string, unknown>) =>
+        String(item["accountCode"] || "").startsWith("2"),
+      )
+      .reduce(
+        (sum: number, item: Record<string, unknown>) =>
+          sum + ((item["amount"] as number) ?? 0),
+        0,
+      );
     const currentRatio =
       currentLiabilities > 0 ? currentAssets / currentLiabilities : 0;
 
     const inventory = (balanceSheet.assetItems || [])
-      .filter((item: any) => String(item.accountCode || "").startsWith("12"))
-      .reduce((sum: number, item: any) => sum + item.amount, 0);
+      .filter((item: Record<string, unknown>) =>
+        String(item["accountCode"] || "").startsWith("12"),
+      )
+      .reduce(
+        (sum: number, item: Record<string, unknown>) =>
+          sum + ((item["amount"] as number) ?? 0),
+        0,
+      );
     const quickRatio =
       currentLiabilities > 0
         ? (currentAssets - inventory) / currentLiabilities
@@ -262,7 +284,9 @@ class AnalyticsService {
     };
   }
 
-  private generateBasicTransactionSummary(transactions: any[]): any {
+  private generateBasicTransactionSummary(
+    transactions: Array<Record<string, unknown>>,
+  ): Record<string, unknown> {
     const categoryMap: Record<string, number> = {};
     const dateMap: Record<string, number> = {};
     let totalAmount = 0;

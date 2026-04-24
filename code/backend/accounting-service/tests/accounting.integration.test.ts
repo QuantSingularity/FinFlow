@@ -19,17 +19,19 @@ jest.mock("../src/analytics.service");
 jest.mock("../../common/kafka", () => ({
   sendMessage: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock("jsonwebtoken");
+jest.mock("jsonwebtoken", () => ({
+  verify: jest.fn().mockReturnValue({ sub: "user_123", role: "admin" }),
+  sign: jest.fn().mockReturnValue("mock_access_token"),
+  decode: jest.fn().mockReturnValue({ sub: "user_123", role: "admin" }),
+}));
 
 describe("Accounting API Integration Tests", () => {
   beforeEach(() => {
-    // Clear all mocks before each test
     jest.clearAllMocks();
-
-    // Default JWT verification mock
+    // Re-apply default after clearAllMocks (clearMocks:true in config clears implementations in some jest versions)
     (jwt.verify as jest.Mock).mockReturnValue({
       sub: "user_123",
-      role: "user",
+      role: "admin",
     });
   });
 
@@ -38,9 +40,11 @@ describe("Accounting API Integration Tests", () => {
     jest.restoreAllMocks();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     // Clean up after all tests
     jest.resetModules();
+    // Allow any pending async operations to settle
+    await new Promise<void>((resolve) => setImmediate(resolve));
   });
 
   describe("POST /api/accounting/journal-entries", () => {

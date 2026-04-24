@@ -1,3 +1,17 @@
+export interface AccountSummary {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+}
+
+export interface JournalEntrySummary {
+  id: string;
+  date: Date;
+  reference?: string;
+  description?: string;
+}
+
 export interface LedgerEntry {
   id: string;
   journalEntryId: string;
@@ -7,8 +21,8 @@ export interface LedgerEntry {
   description?: string;
   createdAt: Date;
   updatedAt: Date;
-  account?: any;
-  journalEntry?: any;
+  account?: AccountSummary;
+  journalEntry?: JournalEntrySummary;
 }
 
 export interface LedgerEntryCreateInput {

@@ -143,8 +143,6 @@
   "overrides": {
     "p-limit": "3.1.0",
     "yocto-queue": "0.1.0",
-    "send": {
-      "mime": "1.6.0"
-    }
+    "mime": "2.6.3"
   }
 }

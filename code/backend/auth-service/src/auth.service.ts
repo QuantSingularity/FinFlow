@@ -236,13 +236,13 @@ class AuthService {
   private generateAccessToken(userId: string, role: string): string {
     return jwt.sign({ sub: userId, role }, config.jwt.secret, {
       expiresIn: config.jwt.expiresIn,
-    } as any);
+    } as import("jsonwebtoken").SignOptions);
   }
 
   private generateRefreshToken(userId: string, role: string): string {
     return jwt.sign({ sub: userId, role }, config.jwt.secret, {
       expiresIn: config.jwt.refreshExpiresIn,
-    } as any);
+    } as import("jsonwebtoken").SignOptions);
   }
 
   private validatePasswordStrength(password: string): void {
@@ -334,7 +334,9 @@ class AuthService {
         headers: { Authorization: "token " + access_token },
       },
     );
-    const primaryEmail = emailResponse.data.find((e: any) => e.primary)?.email;
+    const primaryEmail = emailResponse.data.find(
+      (e: { primary: boolean; email: string }) => e.primary,
+    )?.email;
     const { id, name } = profileResponse.data;
     let firstName, lastName;
     if (name) {
