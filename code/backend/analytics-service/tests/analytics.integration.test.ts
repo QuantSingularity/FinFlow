@@ -19,7 +19,7 @@ jest.mock("../src/forecast.model");
 jest.mock("../../common/kafka", () => ({
   sendMessage: jest.fn().mockResolvedValue(undefined),
 }));
-// Explicit factory mock — more reliable than jest.mock("jsonwebtoken") + mockReturnValue
+// Explicit factory mock - more reliable than jest.mock("jsonwebtoken") + mockReturnValue
 // because clearMocks:true in jest.config.js would wipe auto-mock return values between tests.
 jest.mock("jsonwebtoken", () => ({
   verify: jest.fn().mockReturnValue({ sub: "user_123", role: "user" }),

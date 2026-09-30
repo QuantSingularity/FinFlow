@@ -10,14 +10,12 @@ Provides advanced cash flow modeling and forecasting capabilities:
 """
 
 import logging
-
 # --- Inline dependency stubs ---
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
-
 
 
 async def get_database():
@@ -120,7 +118,8 @@ except ImportError:
     Prophet = None  # type: ignore
 
 try:
-    from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+    from sklearn.ensemble import (GradientBoostingRegressor,
+                                  RandomForestRegressor)
     from sklearn.linear_model import Ridge
     from sklearn.preprocessing import MinMaxScaler, StandardScaler
 except ImportError:

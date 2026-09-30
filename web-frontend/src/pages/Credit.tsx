@@ -78,7 +78,7 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="tabular text-4xl font-bold">{score || "—"}</span>
+        <span className="tabular text-4xl font-bold">{score || "-"}</span>
         <span className="text-xs text-muted-foreground">of 850</span>
       </div>
     </div>
@@ -205,7 +205,7 @@ export default function Credit() {
               <>
                 <ScoreRing score={score.data?.score ?? 0} />
                 <p className="mt-3 font-display text-lg font-semibold">
-                  {score.data?.category ?? "—"}
+                  {score.data?.category ?? "-"}
                 </p>
                 {score.data?.factors?.length ? (
                   <ul className="mt-4 w-full space-y-2">
@@ -276,10 +276,10 @@ export default function Credit() {
                         <StatusBadge status={l.status} />
                       </TableCell>
                       <TableCell className="hidden text-muted-foreground sm:table-cell">
-                        {l.term ?? "—"}
+                        {l.term ?? "-"}
                       </TableCell>
                       <TableCell className="hidden text-muted-foreground md:table-cell">
-                        {l.createdAt ? formatDate(l.createdAt) : "—"}
+                        {l.createdAt ? formatDate(l.createdAt) : "-"}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -1,18 +1,12 @@
 import logging
 import os as _os
-
 import sys as _sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from models import (
-    RiskLevel,
-    TransactionRequest,
-    TransactionType,
-    ValidationError,
-    ValidationResult,
-)
+from models import (RiskLevel, TransactionRequest, TransactionType,
+                    ValidationError, ValidationResult)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -1017,7 +1011,7 @@ class BatchTransactionValidator:
 
 
 if __name__ == "__main__":
-    # sys.path already set at module top — models resolves correctly here too
+    # sys.path already set at module top - models resolves correctly here too
     from models import TransactionRequest, TransactionType
 
     validator = TransactionValidator()

@@ -1,6 +1,6 @@
 "use strict";
 /**
- * __mocks__/mime.js  —  Combined mime v1 + v2 polyfill for Jest
+ * __mocks__/mime.js  -  Combined mime v1 + v2 polyfill for Jest
  *
  * WHY THIS EXISTS
  * ───────────────
@@ -76,7 +76,7 @@ for (const [ext, type] of Object.entries(EXT_TO_TYPE)) {
   if (!TYPE_TO_EXT[type]) TYPE_TO_EXT[type] = ext;
 }
 
-// Charsets for text types — used by express/send
+// Charsets for text types - used by express/send
 const CHARSET_MAP = {
   "text/html": "UTF-8",
   "text/plain": "UTF-8",
@@ -158,7 +158,7 @@ const charsets = {
   },
 };
 
-// ─── Export — all four entry points ──────────────────────────────────────────
+// ─── Export - all four entry points ──────────────────────────────────────────
 const mime = {
   // v2
   define,

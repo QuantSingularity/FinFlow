@@ -1,6 +1,5 @@
 import logging
 import os as _os
-
 import sys as _sys
 from datetime import datetime
 from decimal import Decimal
@@ -10,16 +9,10 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from tax_calculation_engine import (
-    TaxCalculationEngine,
-    TaxProfile,
-    TaxType,
-    Transaction,
-)
+from tax_calculation_engine import (TaxCalculationEngine, TaxProfile, TaxType,
+                                    Transaction)
 from tax_rule_management import (  # resolved via sys.path above
-    SAMPLE_TAX_RULES,
-    TaxRuleManager,
-)
+    SAMPLE_TAX_RULES, TaxRuleManager)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

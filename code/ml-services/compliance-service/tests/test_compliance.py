@@ -9,13 +9,8 @@ from typing import Any
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from main import (
-    AMLScreeningResponse,
-    GDPRDataResponse,
-    PSD2AuthResponse,
-    app,
-    compliance_service,
-)
+from main import (AMLScreeningResponse, GDPRDataResponse, PSD2AuthResponse,
+                  app, compliance_service)
 
 
 class TestComplianceService(unittest.TestCase):

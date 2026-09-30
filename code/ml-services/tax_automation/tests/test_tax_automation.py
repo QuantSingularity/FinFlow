@@ -11,19 +11,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 logger = logging.getLogger(__name__)
 
-from international_compliance import (
-    ComplianceCheckType,
-    ComplianceStatus,
-    InternationalComplianceManager,
-)
-from tax_calculation_engine import (
-    CalculationMethod,
-    TaxProfile,
-    TaxRule,
-    TaxType,
-    Transaction,
-    create_sample_data,
-)
+from international_compliance import (ComplianceCheckType, ComplianceStatus,
+                                      InternationalComplianceManager)
+from tax_calculation_engine import (CalculationMethod, TaxProfile, TaxRule,
+                                    TaxType, Transaction, create_sample_data)
 from tax_rule_management import TaxRuleManager
 
 

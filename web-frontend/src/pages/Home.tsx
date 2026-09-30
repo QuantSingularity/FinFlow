@@ -145,7 +145,7 @@ export default function Home() {
                     tone: "text-success",
                   },
                   {
-                    name: "AWS — invoice #2241",
+                    name: "AWS - invoice #2241",
                     time: "Yesterday",
                     amount: "-$3,180.00",
                     tone: "text-foreground",

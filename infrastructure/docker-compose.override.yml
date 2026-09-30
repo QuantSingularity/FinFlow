@@ -1,4 +1,4 @@
-# Development overrides — automatically merged by docker compose
+# Development overrides - automatically merged by docker compose
 # Use: docker compose up
 # Adds: port exposure, hot-reload mounts, debug env vars, relaxed healthchecks
 

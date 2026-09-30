@@ -1,4 +1,4 @@
-# FinFlow Backend — Monorepo
+# FinFlow Backend - Monorepo
 
 A Node.js/TypeScript + Python microservices backend for the FinFlow financial platform.
 
@@ -79,11 +79,11 @@ cp .env.example .env
 
 Key variables:
 
-- `JWT_SECRET` — JWT signing secret
-- `DATABASE_URL` — PostgreSQL connection string
-- `REDIS_HOST` / `REDIS_PORT` — Redis connection
-- `KAFKA_BROKERS` — Kafka broker addresses
-- `STRIPE_SECRET` / `STRIPE_WEBHOOK_SECRET` — Stripe credentials
+- `JWT_SECRET` - JWT signing secret
+- `DATABASE_URL` - PostgreSQL connection string
+- `REDIS_HOST` / `REDIS_PORT` - Redis connection
+- `KAFKA_BROKERS` - Kafka broker addresses
+- `STRIPE_SECRET` / `STRIPE_WEBHOOK_SECRET` - Stripe credentials
 
 ## Docker
 

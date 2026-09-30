@@ -64,7 +64,7 @@ class PaymentService {
   }
 
   /**
-   * Process a payment — validates details then charges via the processor.
+   * Process a payment - validates details then charges via the processor.
    * This is the method integration and unit tests expect.
    */
   async processPayment(paymentDetails: {

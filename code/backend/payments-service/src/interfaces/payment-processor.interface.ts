@@ -4,7 +4,7 @@ export type ProcessorMetadata = Record<
   string | number | boolean | null | undefined
 >;
 
-/** Generic processor response — processors return different shapes; callers should narrow */
+/** Generic processor response - processors return different shapes; callers should narrow */
 export interface ProcessorResult {
   id: string;
   status: string;

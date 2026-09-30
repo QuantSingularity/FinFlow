@@ -194,7 +194,7 @@ export default function Payments() {
                     <StatusBadge status={p.status} />
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">
-                    {p.processorId ?? "—"}
+                    {p.processorId ?? "-"}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
                     {formatDate(p.createdAt)}

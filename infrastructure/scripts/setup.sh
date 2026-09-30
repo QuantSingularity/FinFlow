@@ -90,7 +90,7 @@ cd "$INFRA_DIR/ansible"
 if [ -f "inventory/prod" ]; then
   ansible-playbook -i inventory/prod site.yml
 else
-  echo "No Ansible inventory found at inventory/prod — skipping Ansible step."
+  echo "No Ansible inventory found at inventory/prod - skipping Ansible step."
 fi
 
 print_header "Deploying applications"

@@ -75,7 +75,7 @@ export default function PaymentDetail() {
                   <StatusBadge status={data.status} />
                 </Row>
                 <Row label="Currency">{data.currency}</Row>
-                <Row label="Processor">{data.processorId ?? "—"}</Row>
+                <Row label="Processor">{data.processorId ?? "-"}</Row>
                 <Row label="Created">{formatDateTime(data.createdAt)}</Row>
                 <Row label="Updated">{formatDateTime(data.updatedAt)}</Row>
               </CardContent>

@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 import os as _os
-
 import sys as _sys
 
 _sys.path.insert(
     0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "src")
 )
-from models import RiskLevel, TransactionRequest, TransactionType, ValidationResult
+from models import (RiskLevel, TransactionRequest, TransactionType,
+                    ValidationResult)
 from validation import BatchTransactionValidator, TransactionValidator
 
 
