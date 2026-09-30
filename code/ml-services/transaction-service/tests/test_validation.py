@@ -12,8 +12,7 @@ import sys as _sys
 _sys.path.insert(
     0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "src")
 )
-from models import (RiskLevel, TransactionRequest, TransactionType,
-                    ValidationResult)
+from models import RiskLevel, TransactionRequest, TransactionType, ValidationResult
 from validation import BatchTransactionValidator, TransactionValidator
 
 
@@ -75,7 +74,9 @@ class TestTransactionValidator(unittest.TestCase):
             self.assertTrue(any(e.code == "INVALID_AMOUNT" for e in result.errors))
 
     def test_validate_high_value_transaction(self):
-        high_value_tx = make_transaction(transaction_id=str(uuid.uuid4()), amount=100000.0)
+        high_value_tx = make_transaction(
+            transaction_id=str(uuid.uuid4()), amount=100000.0
+        )
         result = self.validator.validate_transaction(high_value_tx, CONTEXT)
         self.assertIsInstance(result, ValidationResult)
         self.assertGreater(result.risk_score, 0.0)

@@ -9,8 +9,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-from international_compliance import (ComplianceCheckType,
-                                      InternationalComplianceManager)
+from international_compliance import ComplianceCheckType, InternationalComplianceManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

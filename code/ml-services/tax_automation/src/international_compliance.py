@@ -888,7 +888,11 @@ if __name__ == "__main__":
         },
         "identification_documents": [
             {"type": "government_id", "number": "123456789", "expiry": "2030-01-01"},
-            {"type": "proof_of_address", "document": "utility_bill", "date": "2023-01-01"},
+            {
+                "type": "proof_of_address",
+                "document": "utility_bill",
+                "date": "2023-01-01",
+            },
         ],
         "business_activities": ["consulting"],
         "expected_transaction_volume": 50000.00,

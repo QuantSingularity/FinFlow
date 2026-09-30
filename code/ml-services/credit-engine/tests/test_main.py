@@ -4,7 +4,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
