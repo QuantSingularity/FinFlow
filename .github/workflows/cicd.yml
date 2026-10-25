@@ -44,16 +44,17 @@ jobs:
       - name: Quality checks complete
         run: echo "All formatting and quality checks completed successfully."
 
-  # ============================================================
-  # Job 2 -- Backend Tests
-  # ============================================================
-  backend_tests:
-    name: Backend Tests
+  # =================================================================
+  # Job 2 -- Backend Test & Build (Tests + TypeScript services)
+  # =================================================================
+  backend_test_build:
+    name: Backend Test & Build
     runs-on: ubuntu-latest
     needs: code_quality
 
     env:
       BACKEND_DIR: code/backend
+      PUPPETEER_SKIP_DOWNLOAD: "1"
 
     steps:
       - name: Checkout repository
@@ -89,33 +90,6 @@ jobs:
             ${{ env.BACKEND_DIR }}/**/coverage/
           retention-days: 30
 
-  # ============================================================
-  # Job 3 -- Backend Build (TypeScript services)
-  # ============================================================
-  backend_build:
-    name: Backend Build
-    runs-on: ubuntu-latest
-    needs: backend_tests
-
-    env:
-      BACKEND_DIR: code/backend
-      PUPPETEER_SKIP_DOWNLOAD: "1"
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: code/backend/package-lock.json
-
-      - name: Install backend dependencies
-        working-directory: ${{ env.BACKEND_DIR }}
-        run: npm install
-
       - name: Build all backend services
         working-directory: ${{ env.BACKEND_DIR }}
         run: |
@@ -145,7 +119,7 @@ jobs:
           retention-days: 7
 
   # ============================================================
-  # Job 4 -- Web Frontend Test & Build
+  # Job 3 -- Web Frontend Test & Build
   # ============================================================
   web-frontend_test_and_build:
     name: Web-Frontend Test & Build
@@ -185,7 +159,7 @@ jobs:
           retention-days: 7
 
   # ============================================================
-  # Job 5 -- Mobile Frontend (Expo) Test & Build
+  # Job 4 -- Mobile Frontend (Expo) Test & Build
   # ============================================================
   mobile_frontend:
     name: Mobile-Frontend Test & Build
