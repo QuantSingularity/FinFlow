@@ -10,9 +10,11 @@ import type { ApiError, ApiResponse } from "../types";
 // Base API configuration
 // For Android emulator, use 10.0.2.2 instead of localhost
 // For iOS simulator, localhost works fine
-const getApiUrl = () => {
-  // Try to get from environment or config
-  const envApiUrl = Constants.expoConfig?.extra?.apiUrl;
+const getApiUrl = (): string => {
+  // EXPO_PUBLIC_* variables (see .env.example) are inlined at build time and
+  // take priority over the static value in app.json.
+  const envApiUrl =
+    process.env.EXPO_PUBLIC_API_URL || Constants.expoConfig?.extra?.apiUrl;
 
   if (envApiUrl) {
     return envApiUrl;
@@ -25,8 +27,14 @@ const getApiUrl = () => {
 const API_URL = getApiUrl();
 const API_TIMEOUT = 30000; // 30 seconds
 
+// Endpoints where a 401 means "wrong credentials", not "session expired".
+const CREDENTIAL_ENDPOINTS = ["/api/auth/login", "/api/auth/register"];
+
+type UnauthorizedHandler = () => void;
+
 class ApiService {
   private api: AxiosInstance;
+  private unauthorizedHandler: UnauthorizedHandler | null = null;
 
   constructor() {
     this.api = axios.create({
@@ -65,12 +73,20 @@ class ApiService {
           apiError.errors = (error.response.data as any).errors;
         }
 
-        // Handle 401 Unauthorized errors (token expired)
-        if (error.response?.status === 401) {
-          // Clear stored credentials
+        // Handle 401 Unauthorized errors (token expired/revoked). A 401 from
+        // the login/register endpoints just means bad credentials.
+        const requestUrl = error.config?.url ?? "";
+        if (
+          error.response?.status === 401 &&
+          !CREDENTIAL_ENDPOINTS.some((endpoint) =>
+            requestUrl.endsWith(endpoint),
+          )
+        ) {
+          // Clear stored credentials, then let the app reset its own state
+          // (otherwise Redux would keep showing a signed-in session).
           AsyncStorage.removeItem("auth_token");
           AsyncStorage.removeItem("user");
-          // You could also dispatch a logout action here if using Redux
+          this.unauthorizedHandler?.();
         }
 
         return Promise.reject(apiError);
@@ -109,6 +125,11 @@ class ApiService {
 
   async delete<T = any>(url: string): Promise<ApiResponse<T>> {
     return this.request<T>({ method: "DELETE", url });
+  }
+
+  // Register a callback invoked when the server rejects the stored session.
+  setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+    this.unauthorizedHandler = handler;
   }
 
   // Set base URL (useful for environment switching)

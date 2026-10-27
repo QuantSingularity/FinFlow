@@ -155,8 +155,8 @@ const CreditScoreScreen: React.FC = () => {
           <View style={styles.tipContent}>
             <Text style={styles.tipTitle}>Maintain a long credit history</Text>
             <Text style={styles.tipDescription}>
-              Keep old accounts open, even if you don't use them frequently, to
-              maintain a longer credit history.
+              Keep old accounts open, even if you don&apos;t use them
+              frequently, to maintain a longer credit history.
             </Text>
           </View>
         </View>

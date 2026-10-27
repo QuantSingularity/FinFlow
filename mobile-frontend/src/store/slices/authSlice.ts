@@ -15,6 +15,22 @@ const initialState: AuthState = {
   error: null,
 };
 
+// The API wraps payloads as { success, data: {...} } in some places and returns
+// them bare in others; the access token has been exposed as tokens.accessToken,
+// accessToken or token. Normalise all of those here.
+const unwrap = (body: any) => body?.data ?? body;
+
+const extractSession = (body: any): { token: string; user: User } => {
+  const payload = unwrap(body);
+  const token: string =
+    payload?.tokens?.accessToken ??
+    payload?.accessToken ??
+    payload?.token ??
+    "";
+  const user = payload?.user ?? payload;
+  return { token, user };
+};
+
 // Async thunks
 export const login = createAsyncThunk(
   "auth/login",
@@ -24,12 +40,7 @@ export const login = createAsyncThunk(
   ) => {
     try {
       const response = await authApi.login(email, password);
-      // Backend shape: { success, data: { user, tokens: { accessToken, refreshToken } } }
-      const body: any = response.data;
-      const payload = body?.data ?? body;
-      const token: string =
-        payload?.tokens?.accessToken ?? payload?.token ?? "";
-      const user = payload?.user ?? payload;
+      const { token, user } = extractSession(response.data);
       await AsyncStorage.setItem("auth_token", token);
       await AsyncStorage.setItem("user", JSON.stringify(user));
       return { token, user };
@@ -58,11 +69,7 @@ export const register = createAsyncThunk(
         lastName,
       );
       // Backend returns tokens on register too; auto-sign-in the new user.
-      const body: any = response.data;
-      const payload = body?.data ?? body;
-      const token: string =
-        payload?.tokens?.accessToken ?? payload?.token ?? "";
-      const user = payload?.user ?? payload;
+      const { token, user } = extractSession(response.data);
       if (token) {
         await AsyncStorage.setItem("auth_token", token);
         await AsyncStorage.setItem("user", JSON.stringify(user));
@@ -79,9 +86,10 @@ export const getProfile = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await authApi.getProfile();
+      const user = unwrap(response.data);
       // Update user in AsyncStorage
-      await AsyncStorage.setItem("user", JSON.stringify(response.data));
-      return response.data;
+      await AsyncStorage.setItem("user", JSON.stringify(user));
+      return user;
     } catch (error: any) {
       return rejectWithValue(error.message || "Failed to fetch profile");
     }
@@ -96,9 +104,10 @@ export const updateProfile = createAsyncThunk(
   ) => {
     try {
       const response = await authApi.updateProfile(data);
+      const user = unwrap(response.data);
       // Update user in AsyncStorage
-      await AsyncStorage.setItem("user", JSON.stringify(response.data));
-      return response.data;
+      await AsyncStorage.setItem("user", JSON.stringify(user));
+      return user;
     } catch (error: any) {
       return rejectWithValue(error.message || "Failed to update profile");
     }
@@ -111,20 +120,20 @@ export const logout = createAsyncThunk("auth/logout", async () => {
   return null;
 });
 
-export const checkAuth = createAsyncThunk(
-  "auth/checkAuth",
-  async (_, { dispatch }) => {
+export const checkAuth = createAsyncThunk("auth/checkAuth", async () => {
+  try {
     const token = await AsyncStorage.getItem("auth_token");
     const userJson = await AsyncStorage.getItem("user");
 
     if (token && userJson) {
-      const user = JSON.parse(userJson);
-      return { token, user };
+      return { token, user: JSON.parse(userJson) as User };
     }
+  } catch {
+    // Corrupt or unreadable stored session: fall through to signed-out.
+  }
 
-    return { token: null, user: null };
-  },
-);
+  return { token: null, user: null };
+});
 
 // Auth slice
 const authSlice = createSlice({

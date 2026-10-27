@@ -41,7 +41,7 @@ const ForgotPasswordScreen: React.FC<any> = ({ navigation }: any) => {
           "Password reset instructions have been sent to your email address.",
           [{ text: "OK", onPress: () => navigation.navigate("Login") }],
         );
-      } catch (_error) {
+      } catch {
         Alert.alert("Error", "Failed to send reset email. Please try again.");
       } finally {
         setIsLoading(false);
@@ -54,8 +54,8 @@ const ForgotPasswordScreen: React.FC<any> = ({ navigation }: any) => {
       <View style={styles.formContainer}>
         <Text style={styles.title}>Reset Password</Text>
         <Text style={styles.subtitle}>
-          Enter your email address and we'll send you instructions to reset your
-          password.
+          Enter your email address and we&apos;ll send you instructions to reset
+          your password.
         </Text>
 
         {!emailSent && (
